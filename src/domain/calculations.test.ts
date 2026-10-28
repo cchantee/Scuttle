@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { accountBalance, allocatedForPaycheck, allocationSummary, goalSummary, unallocatedForPaycheck, validateTransaction } from './calculations';
+import { accountBalance, activeBudgetAllocations, allocatedForPaycheck, allocationSummary, goalSummary, unallocatedForPaycheck, validateTransaction } from './calculations';
 import { AppData, emptyData } from './models';
 import { removeRecord, upsertRecord } from './store';
 
@@ -34,6 +34,28 @@ describe('paycheck, allocation, and savings calculations',()=>{
     const removed=removeRecord(edited.data,'transactions','grocery-expense');
     expect(allocationSummary(removed.data,removed.data.allocations[1]).spentCents).toBe(0);
   });
+  it('applies categorized expenses to the newest active paycheck budget and skips archived budgets',()=>{
+    const d=scenario();
+    const second=upsertRecord(d,'paychecks',{id:'p2',amountCents:50000,receivedAt:'2026-10-15'}).data;
+    const withSecondAllocation=upsertRecord(second,'allocations',{id:'a-groceries-new',paycheckId:'p2',categoryId:'groceries',amountCents:10000}).data;
+    const expense=upsertRecord(withSecondAllocation,'transactions',{id:'auto-expense',description:'Coffee',amountCents:500,date:'2026-10-16',type:'expense',categoryId:'groceries'});
+    expect(expense.error).toBeUndefined();
+    expect(expense.data.transactions.find(item=>item.id==='auto-expense')?.allocationId).toBe('a-groceries-new');
+    const archived=upsertRecord(withSecondAllocation,'paychecks',{...withSecondAllocation.paychecks.find(item=>item.id==='p2')!,budgetArchived:true}).data;
+    const withoutActiveBudget=upsertRecord(archived,'transactions',{id:'unbudgeted-expense',description:'Coffee',amountCents:500,date:'2026-10-16',type:'expense',categoryId:'groceries'});
+    expect(withoutActiveBudget.data.transactions.find(item=>item.id==='unbudgeted-expense')?.allocationId).toBe('a-groceries');
+  });
+  it('shows all active paycheck allocations and excludes archived paycheck budgets',()=>{
+    const d=scenario();
+    d.paychecks.push({id:'p2',amountCents:50000,receivedAt:'2026-10-15',budgetArchived:true});
+    d.allocations.push({id:'a-archived',paycheckId:'p2',categoryId:'groceries',amountCents:10000});
+    expect(activeBudgetAllocations(d).map(item=>item.id)).toEqual(d.allocations.filter(item=>item.paycheckId==='p').map(item=>item.id));
+    d.paychecks[0].budgetArchived=true;
+    expect(activeBudgetAllocations(d)).toEqual([]);
+    d.paychecks[0].budgetArchived=false;
+    d.paychecks[1].budgetArchived=false;
+    expect(activeBudgetAllocations(d).map(item=>item.id)).toEqual(d.allocations.map(item=>item.id));
+  });
   it('recalculates contributions after edit and deletion without changing accounts',()=>{
     const d=scenario(), before=accountBalance(d,d.accounts[0]);
     const edited=upsertRecord(d,'contributions',{...d.contributions[0],amountCents:8000});
@@ -46,6 +68,31 @@ describe('paycheck, allocation, and savings calculations',()=>{
 });
 
 describe('account balance convention',()=>{
+  it('records a paycheck deposit once, keeps allocations separate, and reverses edits or deletion',()=>{
+    const d=emptyData();
+    d.accounts=[{id:'checking',name:'Checking',type:'checking',initialBalanceCents:25000},{id:'savings',name:'Savings',type:'savings',initialBalanceCents:5000}];
+    d.categories=[{id:'rent',name:'Rent'}];
+    const paycheck={id:'paycheck',amountCents:150000,receivedAt:'2026-10-01',accountId:'checking'};
+    let result=upsertRecord(d,'paychecks',paycheck);
+    expect(result.error).toBeUndefined();
+    expect(accountBalance(result.data,result.data.accounts[0])).toBe(175000);
+    const withAllocation=upsertRecord(result.data,'allocations',{id:'rent-allocation',paycheckId:'paycheck',categoryId:'rent',amountCents:60000}).data;
+    expect(accountBalance(withAllocation,withAllocation.accounts[0])).toBe(175000);
+    result=upsertRecord(withAllocation,'paychecks',{...paycheck,amountCents:160000,accountId:'savings'});
+    expect(accountBalance(result.data,result.data.accounts[0])).toBe(25000);
+    expect(accountBalance(result.data,result.data.accounts[1])).toBe(165000);
+    const withoutAllocation=removeRecord(result.data,'allocations','rent-allocation').data;
+    const deleted=removeRecord(withoutAllocation,'paychecks','paycheck');
+    expect(accountBalance(deleted.data,deleted.data.accounts[0])).toBe(25000);
+    expect(accountBalance(deleted.data,deleted.data.accounts[1])).toBe(5000);
+  });
+  it('validates paycheck deposit accounts and blocks deleting an account with deposits',()=>{
+    const d=scenario();
+    const invalid=upsertRecord(d,'paychecks',{...d.paychecks[0],accountId:'missing'});
+    expect(invalid.error).toMatch(/deposit account/);
+    const linked=upsertRecord(d,'paychecks',{...d.paychecks[0],accountId:'checking'}).data;
+    expect(removeRecord(linked,'accounts','checking').error).toMatch(/paycheck deposits/);
+  });
   it('reduces cash for purchases and increases outstanding card debt',()=>{
     const d=scenario(); const tx={id:'purchase',description:'Purchase',amountCents:1250,date:'2026-10-05',type:'expense' as const,accountId:'checking'};
     d.transactions.push(tx);

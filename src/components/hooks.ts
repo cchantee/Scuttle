@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { Alert } from 'react-native';
+import { Alert, Platform } from 'react-native';
 import { newId } from '../domain/models';
 import { CollectionName } from '../domain/store';
 import { useData } from '../state/DataProvider';
@@ -9,9 +9,16 @@ export function useCrud(collection: CollectionName) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const saving = useRef(false);
   const list = data[collection] as any[];
-  const confirmDelete = (id: string) => Alert.alert('Delete record?', 'This action cannot be undone. If another record depends on this one, deletion will be blocked with an explanation.', [
-    { text: 'Cancel', style: 'cancel' }, { text: 'Delete', style: 'destructive', onPress: () => { void deleteRecord(collection, id); } },
-  ]);
+  const confirmDelete = (id: string) => {
+    const message = 'This action cannot be undone. If another record depends on this one, deletion will be blocked with an explanation.';
+    if (Platform.OS === 'web') {
+      if (globalThis.confirm(`Delete record? ${message}`)) void deleteRecord(collection, id);
+      return;
+    }
+    Alert.alert('Delete record?', message, [
+      { text: 'Cancel', style: 'cancel' }, { text: 'Delete', style: 'destructive', onPress: () => { void deleteRecord(collection, id); } },
+    ]);
+  };
   const submit = async (fields: any) => {
     if (saving.current) return false;
     saving.current = true;

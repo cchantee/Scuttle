@@ -1,15 +1,49 @@
 import React, { useState } from 'react';
-import { Action, Field, Feedback, Page, RecordLine, SelectId } from '../src/components/ui';
+import { Text } from 'react-native';
+import { usePathname, useRouter } from 'expo-router';
+import { Action, DateField, Field, Feedback, Page, RecordLine } from '../src/components/ui';
 import { useCrud } from '../src/components/hooks';
-import { goalSummary } from '../src/domain/calculations';
+import { goalSummary, pendingForGoal } from '../src/domain/calculations';
 import { formatMoney, parseMoney } from '../src/domain/money';
 import { useData } from '../src/state/DataProvider';
+import { formatDateInput, normalizeDateInput } from '../src/domain/date';
 
-export default function Goals(){const goals=useCrud('goals'),contrib=useCrud('contributions'),{data}=useData();const [name,setName]=useState(''),[target,setTarget]=useState(''),[initial,setInitial]=useState('0.00'),[targetDate,setTargetDate]=useState(''),[goalId,setGoal]=useState(''),[amount,setAmount]=useState(''),[date,setDate]=useState(new Date().toISOString().slice(0,10)),[note,setNote]=useState('');
-const resetGoal=()=>{setName('');setTarget('');setInitial('0.00');setTargetDate('');goals.cancel();};const saveGoal=async()=>{try{const cents=parseMoney(target);if(cents<=0)return alert('Target amount must be greater than zero.');const ok=await goals.submit({name:name.trim(),targetCents:cents,initialSavedCents:parseMoney(initial),targetDate:targetDate||undefined});if(ok)resetGoal();}catch(e){alert(e instanceof Error?e.message:'Enter valid amounts.');}};
-const resetContribution=()=>{setGoal('');setAmount('');setNote('');setDate(new Date().toISOString().slice(0,10));contrib.cancel();};const saveContribution=async()=>{try{if(!goalId)return alert('Choose a goal.');const ok=await contrib.submit({goalId,amountCents:parseMoney(amount),date,note:note||undefined});if(ok)resetContribution();}catch(e){alert(e instanceof Error?e.message:'Invalid contribution.');}};
-return <Page title="Savings goals"><Feedback /><Field label="Goal name" value={name} onChangeText={setName}/><Field label="Target amount" value={target} onChangeText={setTarget} keyboardType="decimal-pad"/><Field label="Already saved at setup (optional)" value={initial} onChangeText={setInitial} keyboardType="decimal-pad"/><Field label="Target date (optional, YYYY-MM-DD)" value={targetDate} onChangeText={setTargetDate}/><Action label={goals.editingId?'Save goal':'Add goal'} onPress={()=>void saveGoal()}/>{goals.editingId?<Action label="Cancel" onPress={resetGoal}/>:null}
-{data.goals.map(g=>{const s=goalSummary(data,g);return <RecordLine key={g.id} title={g.name} detail={`${formatMoney(s.savedCents)} saved · ${formatMoney(s.remainingCents)} remaining · ${s.progressPercent.toFixed(1)}%`} onEdit={()=>goals.edit(g,x=>{setName(x.name);setTarget((x.targetCents/100).toFixed(2));setInitial((x.initialSavedCents/100).toFixed(2));setTargetDate(x.targetDate??'');})} onDelete={()=>goals.confirmDelete(g.id)}/>;})}
-<SelectId label="Goal for contribution" choices={data.goals.map(g=>({id:g.id,title:g.name}))} value={goalId} onChange={setGoal}/><Field label="Contribution amount" value={amount} onChangeText={setAmount} keyboardType="decimal-pad"/><Field label="Contribution date (YYYY-MM-DD)" value={date} onChangeText={setDate}/><Field label="Note (optional)" value={note} onChangeText={setNote}/><Action label={contrib.editingId?'Save contribution':'Record contribution'} onPress={()=>void saveContribution()}/>{contrib.editingId?<Action label="Cancel" onPress={resetContribution}/>:null}
-{data.contributions.map(c=><RecordLine key={c.id} title={`${data.goals.find(g=>g.id===c.goalId)?.name??'Missing goal'} · ${formatMoney(c.amountCents)}`} detail={`${c.date}${c.note?` · ${c.note}`:''}`} onEdit={()=>contrib.edit(c,x=>{setGoal(x.goalId);setAmount((x.amountCents/100).toFixed(2));setDate(x.date);setNote(x.note??'');})} onDelete={()=>contrib.confirmDelete(c.id)}/>)}
-</Page>;}
+export default function Goals() {
+  const crud = useCrud('goals');
+  const { data, reportError } = useData();
+  const router = useRouter();
+  const pathname = usePathname();
+  const [formOpen, setFormOpen] = useState(pathname === '/goal/new');
+  const [name, setName] = useState('');
+  const [target, setTarget] = useState('');
+  const [initial, setInitial] = useState('0.00');
+  const [targetDate, setTargetDate] = useState('');
+  const reset = () => { setName(''); setTarget(''); setInitial('0.00'); setTargetDate(''); crud.cancel(); setFormOpen(false); if (pathname === '/goal/new') router.replace('/goals'); };
+  const save = async () => {
+    try {
+      const targetCents = parseMoney(target);
+      if (targetCents <= 0) return reportError('Target amount must be greater than zero.');
+      const normalizedTargetDate = targetDate ? normalizeDateInput(targetDate) : undefined;
+      if (targetDate && !normalizedTargetDate) return reportError('Enter a valid target date as M/D/YYYY.');
+      const ok = await crud.submit({ name: name.trim(), targetCents, initialSavedCents: parseMoney(initial), targetDate: normalizedTargetDate });
+      if (ok) reset();
+    } catch (e) { reportError(e instanceof Error ? e.message : 'Enter valid amounts.'); }
+  };
+
+  return <Page title={pathname === '/goal/new' ? 'Create goal' : 'Goals'}><Feedback />
+    {!formOpen ? <Action label="+ Create goal" variant="primary" fullWidth onPress={() => router.push('/goal/new')} /> : <>
+      <Field label="Goal name" value={name} onChangeText={setName} />
+      <Field label="Target amount" value={target} onChangeText={setTarget} keyboardType="decimal-pad" />
+      <Field label="Current saved amount (optional)" value={initial} onChangeText={setInitial} keyboardType="decimal-pad" />
+      <DateField label="Target date" value={targetDate} onChangeText={setTargetDate} optional />
+      <Action label="Save goal" variant="primary" fullWidth onPress={() => void save()} />
+      <Action label="Cancel" onPress={reset} />
+    </>}
+    {!data.goals.length ? <Text>Goals can collect contributions across multiple paychecks.</Text> : null}
+    {data.goals.map(goal => {
+      const summary = goalSummary(data, goal);
+      const pending = pendingForGoal(data, goal.id);
+      return <RecordLine key={goal.id} title={goal.name} detail={`${formatMoney(summary.savedCents)} saved / ${formatMoney(goal.targetCents)} · ${formatMoney(summary.remainingCents)} to go${pending ? ` · ${formatMoney(pending)} pending` : ''}${goal.targetDate ? ` · Target ${formatDateInput(goal.targetDate)}` : ''}`} progress={{ value: summary.savedCents, max: goal.targetCents, label: `${summary.progressPercent.toFixed(0)}%` }} onView={() => router.push({ pathname: '/goal/[id]', params: { id: goal.id } })} onEdit={() => { setName(goal.name); setTarget((goal.targetCents / 100).toFixed(2)); setInitial((goal.initialSavedCents / 100).toFixed(2)); setTargetDate(goal.targetDate ? formatDateInput(goal.targetDate) : ''); crud.setEditingId(goal.id); setFormOpen(true); }} onDelete={() => crud.confirmDelete(goal.id)} />;
+    })}
+  </Page>;
+}
