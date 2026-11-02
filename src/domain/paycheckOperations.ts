@@ -1,9 +1,10 @@
+import { paycheckPlanFingerprint, savePaycheckPlan, SavePlanOperation } from './paycheckPlan';
 import { AppData, BudgetAllocation, Id, SavingsContribution } from './models';
 import { allocatedForPaycheck, spentForAllocation } from './calculations';
 import { StoreResult, upsertRecord } from './store';
 import { todayISODate } from './date';
 
-export type PaycheckOperation =
+export type PaycheckOperation = SavePlanOperation
   | { type: 'reviewReceipt'; paycheckId: Id }
   | { type: 'receive'; paycheckId: Id; amountCents: number; accountId: Id; date: string }
   | { type: 'reallocate'; paycheckId: Id; sourceId: Id; goalId?: Id; categoryId?: Id; amountCents: number; id: Id };
@@ -13,6 +14,24 @@ export function applyPaycheckOperation(data: AppData, operation: PaycheckOperati
   const p = data.paychecks.find(p => p.id === operation.paycheckId);
   const fail = (error: string) => ({ data, error });
   if (!p) return fail('Paycheck not found.');
+  if (operation.type === 'savePlan') {
+    if (p.allocationHistory?.some(h => h.id === operation.id)) return { data };
+    if (paycheckPlanFingerprint(data, p.id) !== operation.expectedPlan) return fail('This paycheck changed while you were editing. Reopen the plan to use the latest amounts.');
+    let base = data;
+    if (operation.receipt) {
+      if (p.status !== 'planned') return fail('This paycheck has already been received.');
+      const review = applyPaycheckOperation(data, { type: 'reviewReceipt', paycheckId: p.id });
+      if (review.error) return fail(review.error);
+      base = review.data;
+    }
+    const saved = savePaycheckPlan(base, operation);
+    if (saved.error) return fail(saved.error);
+    if (operation.receipt) {
+      const received = applyPaycheckOperation(saved.data, { type: 'receive', paycheckId: p.id, ...operation.receipt });
+      return received.error ? fail(received.error) : received;
+    }
+    return saved;
+  }
   if (operation.type === 'reviewReceipt') {
     if (p.status !== 'planned') return fail('Only planned paychecks can be reviewed for receipt.');
     if (p.originalPlan) return { data };
@@ -25,7 +44,7 @@ export function applyPaycheckOperation(data: AppData, operation: PaycheckOperati
     if (!Number.isSafeInteger(operation.amountCents) || operation.amountCents <= 0) return fail('Actual income must be greater than zero.');
     if (allocatedForPaycheck(data, p.id) > operation.amountCents) return fail('Allocations exceed actual income. Adjust the paycheck allocations before confirming receipt.');
     // Validate calendar date through the existing paycheck validator, without transitioning yet.
-    const checked = upsertRecord(data, 'paychecks', { ...p, receivedAt: operation.date });
+    const checked = upsertRecord(data, 'paychecks', { ...p, amountCents: operation.amountCents, receivedAt: operation.date });
     if (checked.error) return fail(checked.error);
     return { data: { ...data, paychecks: data.paychecks.map(item => item.id === p.id ? {
       ...p, status: 'received', plannedAmountCents: p.originalPlan?.amountCents ?? p.amountCents, expectedAt: p.originalPlan?.date ?? p.receivedAt,

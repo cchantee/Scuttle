@@ -6,7 +6,7 @@ import { AsyncStorageAdapter } from '../storage/asyncStorage';
 import { isCloudConfigured, supabase } from '../backend/supabase';
 import { SupabaseStorageAdapter } from '../storage/supabaseStorage';
 import { normalizeDateInput } from '../domain/date';
-import { remainingForPaycheck } from '../domain/calculations';
+import { newestPaychecks, remainingForPaycheck } from '../domain/calculations';
 import { nextInterestPostingTransaction } from '../domain/interest';
 import { todayISODate } from '../domain/date';
 import { addSampleData, removeSampleData } from '../domain/demoData';
@@ -154,7 +154,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     const subscription = current.transactions.find(item => item.id === subscriptionId && item.type === 'subscription');
     if (!subscription) { setError('This subscription could not be found.'); return false; }
     if (!subscription.categoryId || !current.categories.some(item => item.id === subscription.categoryId)) { setError('Choose a budget category for this subscription before adding it to a paycheck plan.'); return false; }
-    const paycheck = [...current.paychecks].filter(item => !item.budgetArchived).sort((a, b) => b.receivedAt.localeCompare(a.receivedAt))[0];
+    const paycheck = newestPaychecks(current.paychecks.filter(item => !item.budgetArchived))[0];
     if (!paycheck) { setError('Add a paycheck before planning this subscription.'); return false; }
     if (current.allocations.some(item => item.subscriptionId === subscription.id && item.paycheckId === paycheck.id)) { setError('This subscription is already included in that paycheck plan.'); return false; }
     const result = upsertRecord(current, 'allocations', { id: newId(), paycheckId: paycheck.id, categoryId: subscription.categoryId, amountCents: subscription.amountCents, subscriptionId: subscription.id });

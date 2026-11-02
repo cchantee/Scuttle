@@ -52,7 +52,7 @@ function BottomNavigation() {
       <Pressable accessibilityLabel="Dismiss add menu" onPress={() => setAddMenuOpen(false)} style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: colors.scrim }}>
         <Pressable accessibilityViewIsModal onPress={e => e.stopPropagation()} style={{ maxHeight: '90%', padding: 24, paddingBottom: Math.max(insets.bottom, 24), gap: 10, borderTopLeftRadius: 28, borderTopRightRadius: 28, width: '100%', maxWidth: 680, alignSelf: 'center', backgroundColor: canvas }}>
           <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: 10 }}><Eyebrow>Make your next move</Eyebrow><Text style={{ fontSize: 27, lineHeight: 35, fontWeight: '800' }}>What would you like to add?</Text>
-          {([{ type: 'expense', mark: '↗', title: 'Expense', detail: 'Record a purchase' }, { type: 'income', mark: '↙', title: 'Income', detail: 'Record other money received' }, { type: 'transfer', mark: '⇄', title: 'Transfer', detail: 'Move money or pay a credit card' }, { type: 'paycheck', mark: '▣', title: 'Paycheck', detail: 'Plan or record your next pay' }] as const).map(item => <Pressable key={item.type} accessibilityRole="button" accessibilityLabel={`Add ${item.title}`} onPress={() => choose(item.type)} style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 14, padding: 15, minHeight: 64, borderRadius: 17, backgroundColor: pressed ? colors.pressed : surface })}><Text style={{ color: colors.teal, fontSize: 25 }}>{item.mark}</Text><View style={{ flex: 1 }}><Text style={{ fontWeight: '700' }}>{item.title}</Text><Text style={{ color: muted, fontSize: 13 }}>{item.detail}</Text></View><Text>›</Text></Pressable>)}
+          {([{ type: 'paycheck', mark: '▣', title: 'Paycheck', detail: 'Add pay and budget it' }, { type: 'expense', mark: '↗', title: 'Expense', detail: 'Record a purchase' }, { type: 'transfer', mark: '⇄', title: 'Transfer', detail: 'Move money or pay a credit card' }, { type: 'income', mark: '↙', title: 'Income', detail: 'Record other income without a paycheck plan' }] as const).map(item => <Pressable key={item.type} accessibilityRole="button" accessibilityLabel={`Add ${item.title}`} onPress={() => choose(item.type)} style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 14, padding: 15, minHeight: 64, borderRadius: 17, backgroundColor: pressed ? colors.pressed : surface })}><Text style={{ color: colors.teal, fontSize: 25 }}>{item.mark}</Text><View style={{ flex: 1 }}><Text style={{ fontWeight: '700' }}>{item.title}</Text><Text style={{ color: muted, fontSize: 13 }}>{item.detail}</Text></View><Text>›</Text></Pressable>)}
           <Action label="Cancel" fullWidth onPress={() => setAddMenuOpen(false)} /></ScrollView>
         </Pressable>
       </Pressable>
@@ -60,7 +60,7 @@ function BottomNavigation() {
   </View>;
 }
 
-export const Page = ({ title, children, showTabs = true, headerRight }: React.PropsWithChildren<{ title: string; showTabs?: boolean; headerRight?: React.ReactNode }>) => {
+export const Page = ({ title, children, showTabs = true, headerRight, footer, showSavedNotice = true }: React.PropsWithChildren<{ title: string; showTabs?: boolean; headerRight?: React.ReactNode; footer?: React.ReactNode; showSavedNotice?: boolean }>) => {
   const pathname = usePathname();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -71,13 +71,14 @@ export const Page = ({ title, children, showTabs = true, headerRight }: React.Pr
   return <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, backgroundColor: canvas }}>
     <ScrollView style={{ flex: 1 }} contentContainerStyle={{ width: '100%', maxWidth: 720, alignSelf: 'center', paddingHorizontal: 22, paddingTop: insets.top + 18, paddingBottom: 32, gap: 16 }} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" automaticallyAdjustKeyboardInsets>
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 4 }}>
-        <View style={{ flex: 1, gap: 8 }}>{showBack ? <Pressable accessibilityRole="button" accessibilityLabel="Go back" onPress={() => router.canGoBack() ? router.back() : router.replace(backHref)} style={{ minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' }}><Text style={{ color: colors.teal, fontWeight: '700' }}>‹  Back</Text></Pressable> : <Wordmark />}
+        <View style={{ flex: 1, gap: 8 }}>{showBack ? <Pressable accessibilityRole="button" accessibilityLabel="Go back" onPress={() => router.canGoBack() ? router.back() : router.replace(backHref)} style={{ minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' }}><Text style={{ color: colors.teal, fontWeight: '700' }}>‹  Back</Text></Pressable> : pathname === '/' || pathname === '/welcome' ? <Wordmark /> : null}
           {pathname !== '/welcome' ? <Text accessibilityRole="header" style={{ fontSize: 29, lineHeight: 37, fontWeight: '800', letterSpacing: -1 }}>{title}</Text> : null}</View>{headerRight}
       </View>
       {loading || authLoading ? <View accessibilityLiveRegion="polite" style={{ flexDirection: 'row', alignItems: 'center', gap: 10, padding: 16, backgroundColor: colors.subtle, borderRadius: 16 }}><ActivityIndicator color={colors.teal} /><Text>Loading your records…</Text></View> : null}
       {children}
     </ScrollView>
-    {saved ? <View accessibilityLiveRegion="polite" style={{ padding: 12, backgroundColor: colors.lime }}><Text style={{ textAlign: 'center', fontWeight: '700' }}>✓ Changes saved{showTabs ? '' : ' successfully'}</Text></View> : null}
+    {footer ? <View style={{ backgroundColor: surface, borderTopWidth: 1, borderColor: line, padding: 16, paddingBottom: showTabs ? 16 : Math.max(insets.bottom, 16) }}><View style={{ width: '100%', maxWidth: 676, alignSelf: 'center', gap: 10 }}>{footer}</View></View> : null}
+    {saved && showSavedNotice ? <View accessibilityLiveRegion="polite" style={{ padding: 12, backgroundColor: colors.lime }}><Text style={{ textAlign: 'center', fontWeight: '700' }}>✓ Changes saved{showTabs ? '' : ' successfully'}</Text></View> : null}
     {showTabs ? <BottomNavigation /> : null}<WalkthroughOverlay />
   </KeyboardAvoidingView>;
 };
@@ -91,15 +92,16 @@ export const ProgressBar = ({ value, max }: { value: number; max: number }) => {
   return <View accessibilityLabel={value > max ? "Over assigned amount" : "Progress"} accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: 100, now: Math.round(progress * 100) }} style={{ height: 8, borderRadius: 8, overflow: 'hidden', backgroundColor: colors.border }}><View style={{ width: `${progress * 100}%`, height: '100%', backgroundColor: value > max ? colors.danger : colors.teal, borderRadius: 8 }} /></View>;
 };
 
-export const Field = ({ label, value, onChangeText, placeholder, keyboardType = 'default', multiline = false, secureTextEntry = false, autoCapitalize = 'sentences' }: { label: string; value: string; onChangeText: (v: string) => void; placeholder?: string; keyboardType?: 'default' | 'numeric' | 'decimal-pad' | 'email-address'; multiline?: boolean; secureTextEntry?: boolean; autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters' }) => {
+export const Field = ({ label, value, onChangeText, placeholder, keyboardType = 'default', multiline = false, secureTextEntry = false, autoCapitalize = 'sentences', error, hint }: { error?: string; hint?: string; label: string; value: string; onChangeText: (v: string) => void; placeholder?: string; keyboardType?: 'default' | 'numeric' | 'decimal-pad' | 'email-address'; multiline?: boolean; secureTextEntry?: boolean; autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters' }) => {
   const [showPassword, setShowPassword] = React.useState(false);
   const [focused, setFocused] = React.useState(false);
   return <View style={{ gap: 5 }}>
     <Text style={{ color: ink, fontSize: 13, fontWeight: '700' }}>{label}</Text>
-    <View style={{ flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: focused ? colors.focus : line, borderRadius: 14, paddingRight: secureTextEntry ? 6 : 0, backgroundColor: surface }}>
-      <TextInput accessibilityLabel={label} value={value} onChangeText={onChangeText} placeholder={placeholder} keyboardType={keyboardType} multiline={multiline} secureTextEntry={secureTextEntry && !showPassword} autoCapitalize={autoCapitalize} placeholderTextColor={muted} selectionColor={colors.teal} onFocus={() => setFocused(true)} onBlur={() => { setShowPassword(false); setFocused(false); }} style={{ flex: 1, color: ink, fontSize: 16, paddingHorizontal: 14, paddingVertical: 12, minHeight: multiline ? 96 : 50 }} />
+    <View style={{ flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: error ? colors.danger : focused ? colors.focus : line, borderRadius: 14, paddingRight: secureTextEntry ? 6 : 0, backgroundColor: surface }}>
+      <TextInput accessibilityLabel={label} aria-invalid={Boolean(error)} value={value} onChangeText={onChangeText} placeholder={placeholder} keyboardType={keyboardType} multiline={multiline} secureTextEntry={secureTextEntry && !showPassword} autoCapitalize={autoCapitalize} placeholderTextColor={muted} selectionColor={colors.teal} onFocus={() => setFocused(true)} onBlur={() => { setShowPassword(false); setFocused(false); }} style={{ flex: 1, color: ink, fontSize: 16, paddingHorizontal: 14, paddingVertical: 12, minHeight: multiline ? 96 : 50 }} />
       {secureTextEntry ? <Pressable accessibilityRole="button" accessibilityLabel="Hold to show password" accessibilityHint="Password is hidden again when you release" onPressIn={() => setShowPassword(true)} onPressOut={() => setShowPassword(false)} style={{ minWidth: 44, minHeight: 48, alignItems: 'center', justifyContent: 'center' }}><View style={{ width: 21, height: 14, borderWidth: 1.6, borderColor: ink, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }}><View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: ink }} /></View></Pressable> : null}
     </View>
+    {error ? <Text accessibilityRole="alert" style={{ color: colors.danger, fontSize: 13 }}>{error}</Text> : hint ? <Text style={{ color: muted, fontSize: 13 }}>{hint}</Text> : null}
   </View>;
 };
 
@@ -160,7 +162,7 @@ export const DateField = ({ label, value, onChangeText, optional = false }: { la
   </View>;
 };
 
-export const Action = ({ label, onPress, destructive = false, variant = 'secondary', fullWidth = false, disabled = false, accessibilityLabel }: { accessibilityLabel?: string; label: string; onPress: () => unknown; destructive?: boolean; variant?: 'primary' | 'secondary' | 'text'; fullWidth?: boolean; disabled?: boolean }) => {
+export const Action = ({ label, onPress, destructive = false, variant = 'secondary', fullWidth = false, disabled = false, accessibilityLabel, selected }: { selected?: boolean; accessibilityLabel?: string; label: string; onPress: () => unknown; destructive?: boolean; variant?: 'primary' | 'secondary' | 'text'; fullWidth?: boolean; disabled?: boolean }) => {
   const [busy, setBusy] = React.useState(false);
   const busyRef = React.useRef(false);
   const { reportError } = useData();
@@ -171,7 +173,7 @@ export const Action = ({ label, onPress, destructive = false, variant = 'seconda
     catch (error) { reportError(error instanceof Error ? error.message : 'Could not complete this action. Try again.'); }
     finally { busyRef.current = false; setBusy(false); }
   };
-  return <Pressable onPress={() => void act()} disabled={busy || disabled} accessibilityRole="button" accessibilityLabel={accessibilityLabel ?? label} aria-disabled={busy || disabled} aria-busy={busy} accessibilityState={{ disabled: busy || disabled, busy }} style={({ pressed }) => ({ borderWidth: variant === 'text' ? 0 : 1, borderColor: destructive ? colors.danger : variant === 'primary' ? colors.teal : line, borderRadius: 14, minHeight: 48, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, alignSelf: fullWidth ? 'stretch' : 'flex-start', opacity: disabled ? 0.5 : 1, backgroundColor: destructive ? colors.dangerSurface : variant === 'primary' ? (pressed ? colors.evergreen : colors.teal) : variant === 'text' ? 'transparent' : pressed ? colors.pressed : colors.subtle })}><Text style={{ color: destructive ? colors.danger : variant === 'primary' ? colors.onPrimary : variant === 'text' ? colors.teal : ink, fontWeight: '700', textAlign: 'center' }}>{busy ? 'Saving…' : label}</Text></Pressable>;
+  return <Pressable onPress={() => void act()} disabled={busy || disabled} accessibilityRole="button" accessibilityLabel={accessibilityLabel ?? label} aria-disabled={busy || disabled} aria-busy={busy} aria-pressed={selected} accessibilityState={{ disabled: busy || disabled, busy, selected }} style={({ pressed }) => ({ borderWidth: variant === 'text' ? 0 : 1, borderColor: destructive ? colors.danger : variant === 'primary' ? colors.teal : line, borderRadius: 14, minHeight: 48, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, alignSelf: fullWidth ? 'stretch' : 'flex-start', opacity: disabled ? 0.5 : 1, backgroundColor: destructive ? colors.dangerSurface : variant === 'primary' ? (pressed ? colors.evergreen : colors.teal) : variant === 'text' ? 'transparent' : pressed ? colors.pressed : colors.subtle })}><Text style={{ color: destructive ? colors.danger : variant === 'primary' ? colors.onPrimary : variant === 'text' ? colors.teal : ink, fontWeight: '700', textAlign: 'center' }}>{busy ? 'Saving…' : label}</Text></Pressable>;
 };
 
 function supportsAccountInterest(type: AccountType) { return type === 'savings' || type === 'high_yield_savings' || type === 'credit_card'; }
@@ -179,13 +181,31 @@ function supportsAccountInterest(type: AccountType) { return type === 'savings' 
 type FeatureRoute = '/profile' | '/more' | '/paychecks' | '/budget' | '/transactions' | '/accounts' | '/goals' | '/history';
 export const FeatureButton = ({ title, detail, href }: { title: string; detail: string; href: FeatureRoute }) => <Link href={href} asChild><Pressable accessibilityRole="button" style={({ pressed }) => ({ borderWidth: 1, borderColor: line, borderRadius: 18, padding: 18, gap: 5, backgroundColor: pressed ? colors.pressed : surface })}><Text style={{ color: ink, fontWeight: '700', fontSize: 15 }}>{title}</Text><Text style={{ color: muted, fontSize: 13 }}>{detail}</Text></Pressable></Link>;
 
-export const RecordLine = ({ title, detail, onEdit, onDelete, onView, viewLabel = 'View details  ›', progress }: { title: string; detail: string; onEdit: () => void; onDelete: () => void; onView?: () => void; viewLabel?: string; progress?: { value: number; max: number; label?: string } }) => <Card>
-  <Text style={{ color: ink, fontWeight: '700', fontSize: 15 }}>{title}</Text>{progress ? <><ProgressBar value={progress.value} max={progress.max} /><Text style={{ color: muted, fontSize: 12 }}>{progress.label ?? `${progress.max ? Math.round(progress.value / progress.max * 100) : 0}%`}</Text></> : null}<Text style={{ color: muted, lineHeight: 19 }}>{detail}</Text>
-  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 7, marginTop: 2 }}>{onView ? <Action label={viewLabel} onPress={onView} /> : null}<Action label="Edit" variant="text" onPress={onEdit} /><Action label="Delete" variant="text" destructive onPress={onDelete} /></View>
-</Card>;
+/** Whole-row access plus contextual actions keeps financial lists scannable. */
+export const RecordLine = ({ title, detail, onEdit, onDelete, onView, progress, amount, tone = 'default' }: { title: string; detail: string; onEdit: () => void; onDelete: () => void; onView?: () => void; viewLabel?: string; progress?: { value: number; max: number; label?: string }; amount?: string; tone?: 'default' | 'positive' | 'caution' }) => {
+  const [menu, setMenu] = React.useState(false);
+  return <Card style={{ padding: 16, gap: 10 }}>
+    <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8 }}>
+      <Pressable accessibilityRole="button" accessibilityLabel={`Open ${title}`} onPress={onView ?? onEdit} style={{ flex: 1, minHeight: 48, gap: 4 }}>
+        <Text style={{ color: ink, fontWeight: '700', fontSize: 16 }}>{title}</Text>
+        {amount ? <Text style={{ fontWeight: '800', fontSize: 21, lineHeight: 29, color: tone === 'positive' ? colors.teal : tone === 'caution' ? colors.danger : ink, fontVariant: ['tabular-nums'] }}>{amount}</Text> : null}
+        <Text style={{ color: muted, fontSize: 13, lineHeight: 20 }}>{detail}</Text>
+      </Pressable>
+      <Pressable accessibilityRole="button" accessibilityLabel={`Actions for ${title}`} aria-expanded={menu} onPress={() => setMenu(true)} style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 14, backgroundColor: colors.subtle }}><Text style={{ fontSize: 22 }}>⋯</Text></Pressable>
+    </View>
+    {progress ? <><ProgressBar value={progress.value} max={progress.max} /><Text style={{ color: progress.value > progress.max ? colors.danger : muted, fontSize: 12 }}>{progress.label ?? `${progress.max ? Math.round(progress.value / progress.max * 100) : 0}%`}</Text></> : null}
+    <Modal visible={menu} transparent animationType="fade" onRequestClose={() => setMenu(false)}><Pressable onPress={() => setMenu(false)} style={{ flex: 1, justifyContent: 'center', padding: 22, backgroundColor: colors.scrim }}><Pressable accessibilityViewIsModal onPress={e => e.stopPropagation()} style={{ width: '100%', maxWidth: 420, alignSelf: 'center', backgroundColor: surface, padding: 22, gap: 12, borderRadius: 24 }}><Text style={{ fontSize: 21, fontWeight: '700' }}>{title}</Text><Action label="Edit" fullWidth onPress={() => { setMenu(false); onEdit(); }} /><Action label="Delete record…" destructive fullWidth onPress={() => { setMenu(false); onDelete(); }} /><Action label="Cancel" variant="text" fullWidth onPress={() => setMenu(false)} /></Pressable></Pressable></Modal>
+  </Card>;
+};
+
+export function Disclosure({ title, children, initiallyOpen = false }: React.PropsWithChildren<{ title: string; initiallyOpen?: boolean }>) {
+  const [open, setOpen] = React.useState(initiallyOpen);
+  return <View style={{ gap: 12 }}><Pressable accessibilityRole="button" accessibilityLabel={title} aria-expanded={open} accessibilityState={{ expanded: open }} onPress={() => setOpen(!open)} style={{ minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: 1, borderColor: line, gap: 12 }}><Text style={{ fontWeight: '700' }}>{title}</Text><Text style={{ color: colors.teal }}>{open ? '−' : '+'}</Text></Pressable>{open ? children : null}</View>;
+}
 
 export const SelectId = ({ label, choices, value, onChange, create }: { label: string; choices: { id: string; title: string }[]; value: string; onChange: (id: string) => void; create?: 'category' | 'account' }) => {
   const [open, setOpen] = React.useState(false);
+  const [search, setSearch] = React.useState('');
   const [createOpen, setCreateOpen] = React.useState(false);
   const [name, setName] = React.useState('');
   const [accountType, setAccountType] = React.useState<AccountType>('checking');
@@ -217,11 +237,22 @@ export const SelectId = ({ label, choices, value, onChange, create }: { label: s
     { id: 'credit_card', title: 'Credit card' },
   ];
   return <View style={{ gap: 5 }}><Text style={{ color: ink, fontSize: 13, fontWeight: '700' }}>{label}</Text>
-    <Action fullWidth accessibilityLabel={`${label}: ${selected?.title ?? 'Choose'}`} label={`${selected?.title ?? 'Choose…'}   ⌄`} onPress={() => setOpen(!open)} />
-    {open ? <View style={{ borderWidth: 1, borderColor: line, borderRadius: 14, overflow: 'hidden', backgroundColor: surface }}>
-      {choices.map(choice => <Pressable key={choice.id} accessibilityRole="button" accessibilityState={{ selected: value === choice.id }} onPress={() => { onChange(value === choice.id ? '' : choice.id); setOpen(false); }} style={{ padding: 14, minHeight: 48, borderBottomWidth: 1, borderBottomColor: line, backgroundColor: value === choice.id ? colors.subtle : surface }}><Text style={{ color: ink }}>{value === choice.id ? '✓  ' : ''}{choice.title}{value === choice.id ? '  ·  tap to clear' : ''}</Text></Pressable>)}
-      {create ? <Pressable accessibilityRole="button" onPress={startCreate} style={({ pressed }) => ({ padding: 14, minHeight: 48, backgroundColor: pressed ? colors.pressed : surface })}><Text style={{ color: ink, fontWeight: '600' }}>＋ Create new {create}</Text></Pressable> : choices.length === 0 ? <Text style={{ color: muted, padding: 14, minHeight: 48 }}>No records available. Create one first.</Text> : null}
-    </View> : null}
+    <Action fullWidth accessibilityLabel={`${label}: ${selected?.title ?? 'Choose'}`} label={`${selected?.title ?? 'Choose…'}   ⌄`} onPress={() => { setSearch(''); setOpen(true); }} />
+    <Modal visible={open && !createOpen} transparent animationType="slide" onRequestClose={() => setOpen(false)}>
+      <Pressable onPress={() => setOpen(false)} style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: colors.scrim }}>
+        <Pressable accessibilityViewIsModal onPress={e => e.stopPropagation()} style={{ width: '100%', maxWidth: 680, maxHeight: '85%', alignSelf: 'center', backgroundColor: canvas, padding: 22, borderTopLeftRadius: 28, borderTopRightRadius: 28, gap: 12 }}>
+          <Text accessibilityRole="header" style={{ fontWeight: '800', fontSize: 22 }}>{label}</Text>
+          {choices.length > 5 ? <Field label={`Search ${label.toLowerCase()}`} value={search} onChangeText={setSearch} placeholder="Type a name" /> : null}
+          <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: 6, paddingBottom: 12 }}>
+            {choices.filter(choice => choice.title.toLowerCase().includes(search.trim().toLowerCase())).map(choice => <Pressable key={choice.id} accessibilityRole="button" accessibilityLabel={choice.title} accessibilityState={{ selected: value === choice.id }} aria-selected={value === choice.id} onPress={() => { onChange(choice.id); setOpen(false); }} style={{ padding: 15, minHeight: 52, borderRadius: 14, backgroundColor: value === choice.id ? colors.lime : surface }}><Text style={{ color: ink }}>{value === choice.id ? '✓  ' : ''}{choice.title}</Text></Pressable>)}
+            {choices.length === 0 ? <Text style={{ color: muted }}>No choices yet.{create ? ` Create a ${create} below.` : ''}</Text> : choices.filter(c => c.title.toLowerCase().includes(search.trim().toLowerCase())).length === 0 ? <Text style={{ color: muted }}>No matching choices.</Text> : null}
+          </ScrollView>
+          {create ? <Action label={`Create new ${create}`} fullWidth onPress={startCreate} /> : null}
+          {value ? <Action label="Clear selection" variant="text" fullWidth onPress={() => { onChange(''); setOpen(false); }} /> : null}
+          <Action label="Done" fullWidth onPress={() => setOpen(false)} />
+        </Pressable>
+      </Pressable>
+    </Modal>
     {create ? <Modal visible={createOpen} transparent animationType="fade" onRequestClose={() => setCreateOpen(false)}>
       <Pressable onPress={() => setCreateOpen(false)} style={{ flex: 1, justifyContent: 'center', padding: 20, backgroundColor: colors.scrim }}>
         <Pressable onPress={event => event.stopPropagation()} style={{ width: '100%', maxWidth: 400, maxHeight: '85%', alignSelf: 'center', padding: 16, borderRadius: 14, borderWidth: 1, borderColor: line, backgroundColor: surface, gap: 10 }}>
@@ -236,7 +267,7 @@ export const SelectId = ({ label, choices, value, onChange, create }: { label: s
               <Field label="Notes (optional)" value={notes} onChangeText={setNotes} multiline />
             </> : null}
             {createError ? <Text accessibilityRole="alert" style={{ color: ink }}>{createError}</Text> : null}
-            <Action label={`Create ${create}`} variant="primary" fullWidth onPress={() => void createRecord()} />
+            <Action label={`Create ${create}`} variant="primary" fullWidth onPress={() => createRecord()} />
             <Action label="Cancel" onPress={() => setCreateOpen(false)} />
           </ScrollView>
         </Pressable>

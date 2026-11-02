@@ -24,7 +24,7 @@ The mobile client uses only the public anon/publishable key. Row-level security 
 
 The app identifiers in `app.json` (`com.scuttle.app`) are local project identifiers and can be changed before distribution.
 
-Other scripts: `npm test`, `npm run typecheck`, and `npm run qa:backend` (runs both TypeScript checking and the automated test suite). The backend QA persona and its Supabase integration checklist are documented in `docs/backend-qa-persona.md`.
+Other scripts: `npm test`, `npm run typecheck`, and `npm run qa:backend` (runs both TypeScript checking and the automated test suite). The [design and verification log](AI-design-decisions.md#verification) includes backend QA coverage and the remaining Supabase integration checklist.
 
 ## Records and calculations
 
@@ -63,7 +63,7 @@ Other scripts: `npm test`, `npm run typecheck`, and `npm run qa:backend` (runs b
 - Cloud account and synchronization features require a Supabase project and the setup above. Without it, local device mode is used.
 - Local-only mode stores financial data in AsyncStorage without app-level encryption. Cloud mode stores it in an owner-scoped Supabase row.
 - Goal contributions can reserve account funds, be completed in place, or settle via an explicitly recorded transfer. Budget-group allocations designate funds without moving account money.
-- The `AI_Designed_App` branch implements Scuttle Brand v1.1 across the working application. iOS/Android/web JavaScript bundles export successfully; physical-device and native binary verification remain manual. See [AI-only design decisions and verification](docs/ai-only-design-decisions.md).
+- The `AI_Designed_App` branch implements Scuttle Brand v1.1 across the working application. iOS/Android/web JavaScript bundles export successfully; physical-device and native binary verification remain manual. See [AI-only design decisions and verification](AI-design-decisions.md).
 - Date entry accepts `M/D/YYYY` with one or two digits for month/day and includes an in-app calendar picker; saved dates stay normalized as `YYYY-MM-DD`.
 - Sample data can be loaded and removed from More. Removal preserves dependency checks.
 
@@ -75,4 +75,10 @@ SDK 58 dependency validation and TypeScript checking pass. Expo exported web, iO
 
 On `AI_Designed_App`, the branded interface uses **Home · Budget · Add · Activity · More**. Add opens Expense, Income, Transfer, or Paycheck entry; More keeps Accounts, Savings Goals, Paychecks, Profile, sample data, and existing tools reachable. Planned/received paychecks and category-to-goal contributions remain fully functional.
 
-The package is extracted under `assets/Scuttle_Brand_v1_1/`. Design decisions, ten-screen route mapping, browser scenarios, verification results, and known limits are in [docs/ai-only-design-decisions.md](docs/ai-only-design-decisions.md). Financial operations, storage, backend configuration, and migrations are unchanged by the brand update.
+The package is extracted under `assets/Scuttle_Brand_v1_1/`. Design decisions, ten-screen route mapping, browser scenarios, verification results, and known limits are in [AI-design-decisions.md](AI-design-decisions.md). Financial operations, storage, backend configuration, and migrations are unchanged by the brand update.
+
+## UX refinement on AI_Designed_App_2
+
+Add a paycheck, then use **Save paycheck & budget** to enter its category and goal amounts together. The planner keeps a live **Left to budget** total and saves one complete distribution. **Mark as received** supports reviewing actual pay and adjusting that distribution in the same atomic save. Category budget remaining, unassigned pay, and recorded account balances stay distinct.
+
+Budget now separates **Spending**, **Planned**, and **Archived**. Activity offers **Money activity** or **All records**. Record rows open directly; their **⋯** menus expose edit/delete. See [the independent UX evaluation and verification log](AI-design-decisions.md#ux-refinement) for decisions, financial safeguards, browser scenarios, and remaining manual checks.

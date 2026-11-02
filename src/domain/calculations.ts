@@ -1,4 +1,4 @@
-import { AppData, BudgetAllocation, SavingsGoal, SubscriptionFrequency, Transaction, VirtualAccount } from './models';
+import { AppData, BudgetAllocation, Paycheck, SavingsGoal, SubscriptionFrequency, Transaction, VirtualAccount } from './models';
 import { normalizeDateInput } from './date';
 
 export const allocatedForPaycheck = (data: AppData, paycheckId: string) =>
@@ -195,3 +195,7 @@ export function validateAllocation(data: AppData, allocation: BudgetAllocation):
   }
   return null;
 }
+
+/** Latest date first; for equal dates the most recently added paycheck wins. */
+export const newestPaychecks = (paychecks: Paycheck[]) => paychecks.map((paycheck, index) => ({ paycheck, index }))
+  .sort((a, b) => b.paycheck.receivedAt.localeCompare(a.paycheck.receivedAt) || b.index - a.index).map(row => row.paycheck);

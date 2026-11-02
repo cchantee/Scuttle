@@ -1,93 +1,46 @@
-import { colors } from '../../src/design/theme';
-import React, { useRef, useState } from 'react';
-import { Link, useLocalSearchParams, useRouter } from 'expo-router';
+import React from 'react';
+import { View } from 'react-native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Text } from '../../src/design/Text';
-import { allocationSummary, allocatedForPaycheck, unallocatedForPaycheck } from '../../src/domain/calculations';
-import { formatMoney, parseMoney } from '../../src/domain/money';
-import { Action, Card, DateField, Field, SelectId, Feedback, Page, ProgressBar, RecordLine, SectionTitle } from '../../src/components/ui';
-import { useCrud } from '../../src/components/hooks';
+import { colors } from '../../src/design/theme';
+import { Action, Card, Disclosure, Feedback, Page, ProgressBar, RecordLine, SectionTitle } from '../../src/components/ui';
+import { Metric } from '../../src/components/brand';
+import { allocatedForPaycheck, allocationSummary, unallocatedForPaycheck } from '../../src/domain/calculations';
+import { formatMoney } from '../../src/domain/money';
+import { formatDateDisplay } from '../../src/domain/date';
 import { useData } from '../../src/state/DataProvider';
-import { Hero } from '../../src/components/brand';
-import { newId } from '../../src/domain/models';
-import { formatDateDisplay, normalizeDateInput, todayDateInput } from '../../src/domain/date';
+import { useCrud } from '../../src/components/hooks';
 
 export default function PaycheckDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const { data, saveRecord } = useData();
   const router = useRouter();
-  const { data, paycheckOperation, saveRecord, reportError } = useData();
-  const [receipt, setReceipt] = useState(false);
-  const [actual, setActual] = useState('');
-  const [account, setAccount] = useState('');
-  const [date, setDate] = useState(todayDateInput());
-  const [editingGoalId, setEditingGoalId] = useState('');
-  const [sourceId, setSourceId] = useState('');
-  const [goalId, setGoalId] = useState('');
-  const [categoryId, setCategoryId] = useState('');
-  const [amount, setAmount] = useState('');
-  const busy = useRef(false);
-  const run = async (fn: () => Promise<unknown>) => {
-    if (busy.current) return;
-    busy.current = true;
-    try { await fn(); } catch (e) { reportError(e instanceof Error ? e.message : 'Invalid amount.'); } finally { busy.current = false; }
-  };
+  const paycheckCrud = useCrud('paychecks');
   const allocationCrud = useCrud('allocations');
-  const transactionCrud = useCrud('transactions');
   const contributionCrud = useCrud('contributions');
-  const paycheck = data.paychecks.find(item => item.id === id);
-  if (!paycheck) return <Page title="Paycheck"><Text>Paycheck not found.</Text><Link href="/paychecks">Back to paychecks</Link></Page>;
-  const allocations = data.allocations.filter(item => item.paycheckId === paycheck.id);
-  const allocationIds = new Set(allocations.map(item => item.id));
-  const linkedExpenses = data.transactions.filter(item => item.type === 'expense' && item.allocationId && allocationIds.has(item.allocationId)).sort((a, b) => b.date.localeCompare(a.date));
-  const accountMoves = data.transactions.filter(item => item.paycheckId === paycheck.id).sort((a, b) => b.date.localeCompare(a.date));
-  const remainingAccount = data.accounts.find(account => account.id === (paycheck.remainingAccountId ?? paycheck.accountId));
-  return <Page title="Paycheck details"><Feedback />
-    <Hero label={paycheck.status === 'planned' ? 'Expected paycheck' : 'Paycheck received'} amount={formatMoney(paycheck.amountCents)} detail={`${formatDateDisplay(paycheck.receivedAt)} · ${paycheck.source || 'Income'}`} />
-    <Card><Text style={{ color: colors.muted }}>{paycheck.status === 'planned' ? 'Planned funds · not yet available' : paycheck.accountId ? `Deposited to ${data.accounts.find(a => a.id === paycheck.accountId)?.name || 'account'}${remainingAccount && remainingAccount.id !== paycheck.accountId ? ` · remaining funds in ${remainingAccount.name}` : ''}` : 'Standalone paycheck budget'}</Text><ProgressBar value={allocatedForPaycheck(data, paycheck.id)} max={paycheck.amountCents} /><Text>{formatMoney(allocatedForPaycheck(data, paycheck.id))} assigned · {formatMoney(unallocatedForPaycheck(data, paycheck.id))} unassigned</Text><Text style={{ color: colors.muted, fontSize: 13 }}>Assigning money organizes this paycheck. It does not transfer or deposit funds.</Text></Card>
-    <Text>{paycheck.status === 'planned' ? 'Planned · funds are not available to spend' : 'Received'}</Text>
-    {paycheck.plannedAmountCents !== undefined ? <Text>Planned {formatMoney(paycheck.plannedAmountCents)} · Actual {formatMoney(paycheck.actualAmountCents ?? paycheck.amountCents)} · Difference {formatMoney(paycheck.amountCents - paycheck.plannedAmountCents)}</Text> : null}
-    {paycheck.status === 'planned' ? <Action label="Mark as Received" variant="primary" fullWidth onPress={() => run(async () => { if (await paycheckOperation({ type: 'reviewReceipt', paycheckId: paycheck.id })) { setActual((paycheck.amountCents / 100).toFixed(2)); setReceipt(true); } })} /> : null}
-    {receipt && paycheck.status === 'planned' ? <>
-      <Field label="Actual amount received" value={actual} onChangeText={setActual} keyboardType="decimal-pad" />
-      <DateField label="Date received" value={date} onChangeText={setDate} />
-      <SelectId label="Receiving account" value={account} onChange={setAccount} choices={data.accounts.filter(a => a.type !== 'credit_card').map(a => ({ id: a.id, title: a.name }))} />
-      <Text>Review the allocations below. If actual income is lower, edit or remove allocations before confirming. The original plan is retained.</Text>
-      <Action label="Confirm receipt" variant="primary" fullWidth onPress={() => run(async () => { const receivedAt = normalizeDateInput(date); if (!receivedAt) return reportError('Enter a valid receipt date.'); if (await paycheckOperation({ type: 'receive', paycheckId: paycheck.id, amountCents: parseMoney(actual), accountId: account, date: receivedAt })) setReceipt(false); })} />
-    </> : null}
-    {paycheck.notes ? <Text>{paycheck.notes}</Text> : null}
-    <Action label={paycheck.accountId ? 'Edit or move remaining funds' : 'Edit or move paycheck to an account'} onPress={() => router.push({ pathname: '/paychecks', params: { paycheckId: paycheck.id } })} />
-    <Action label="+ Add category allocation" variant="primary" fullWidth onPress={() => router.push({ pathname: '/budget', params: { paycheckId: paycheck.id } })} />
-    <SectionTitle>Categories</SectionTitle>
-    {!allocations.length ? <Text>No categories allocated from this paycheck yet.</Text> : null}
-    {allocations.map(allocation => {
-      const category = data.categories.find(item => item.id === allocation.categoryId);
-      const summary = allocationSummary(data, allocation);
-      return <RecordLine key={allocation.id} title={category?.name ?? 'Missing category'} detail={`${formatMoney(summary.allocatedCents)} allocated · ${formatMoney(summary.spentCents)} spent · ${formatMoney(summary.remainingCents)} left`} onView={() => router.push({ pathname: '/allocation/[id]', params: { id: allocation.id } })} onEdit={() => router.push({ pathname: '/budget', params: { allocationId: allocation.id } })} onDelete={() => allocationCrud.confirmDelete(allocation.id)} />;
-    })}
-    <SectionTitle>Savings goal allocations</SectionTitle>
-    <Text>These designate paycheck funds without transferring money. Planned allocations do not count toward actual savings.</Text>
-    {data.contributions.filter(c => c.paycheckId === paycheck.id).map(c => <RecordLine key={c.id} title={data.goals.find(g => g.id === c.goalId)?.name ?? 'Goal'} detail={`${formatMoney(c.amountCents)} · ${paycheck.status === 'planned' ? 'Planned' : 'Allocated, not transferred'}`} onEdit={() => { setEditingGoalId(c.id); setSourceId(''); setGoalId(c.goalId); setAmount((c.amountCents / 100).toFixed(2)); }} onDelete={() => contributionCrud.confirmDelete(c.id)} />)}
-    {editingGoalId ? <><Text>Editing goal allocation</Text><Action label="Cancel goal edit" onPress={() => { setEditingGoalId(''); setAmount(''); }} /></> : null}
-    <SelectId label="Destination goal" value={goalId} onChange={v => { setGoalId(v); setCategoryId(''); }} choices={data.goals.map(g => ({ id: g.id, title: g.name }))} />
-    <SelectId label="Or destination category" value={categoryId} onChange={v => { setCategoryId(v); setGoalId(''); }} choices={data.categories.map(c => ({ id: c.id, title: c.name }))} />
-    <SelectId label="Source category (optional for goal allocation)" value={sourceId} onChange={setSourceId} choices={allocations.filter(a => !a.subscriptionId).map(a => ({ id: a.id, title: `${data.categories.find(c => c.id === a.categoryId)?.name} · ${formatMoney(allocationSummary(data, a).remainingCents)} available` }))} />
-    <Action label="Use unallocated funds" onPress={() => setSourceId('')} />
-    <Field label="Amount to allocate or reallocate" value={amount} onChangeText={setAmount} keyboardType="decimal-pad" />
-    <Action label="Confirm allocation" variant="primary" fullWidth onPress={() => run(async () => {
-      const amountCents = parseMoney(amount);
-      if (editingGoalId && (sourceId || !goalId)) return reportError('Choose a goal and use unallocated funds while editing.');
-      const ok = sourceId ? await paycheckOperation({ type: 'reallocate', paycheckId: paycheck.id, sourceId, goalId: goalId || undefined, categoryId: categoryId || undefined, amountCents, id: newId() }) : goalId ? await saveRecord('contributions', { id: editingGoalId || newId(), paycheckId: paycheck.id, goalId, amountCents, date: new Date().toISOString().slice(0, 10), status: 'allocated' }) : false;
-      if (ok) { setAmount(''); setSourceId(''); setEditingGoalId(''); } else if (!sourceId && !goalId) reportError('Choose a goal or source and destination categories.');
-    })} />
-    {paycheck.originalPlan ? <><SectionTitle>Original planned distribution</SectionTitle><Text>{formatMoney(paycheck.originalPlan.amountCents)} · {formatDateDisplay(paycheck.originalPlan.date)}</Text>{paycheck.originalPlan.allocations.map(a => <Text key={a.id}>{data.categories.find(c => c.id === a.categoryId)?.name ?? 'Category'}: {formatMoney(a.amountCents)}</Text>)}{paycheck.originalPlan.goals.map(c => <Text key={c.id}>{data.goals.find(g => g.id === c.goalId)?.name ?? 'Goal'}: {formatMoney(c.amountCents)}</Text>)}</> : null}
-    <SectionTitle>Allocation history</SectionTitle>
-    {(paycheck.allocationHistory ?? []).map(h => <Text key={h.id}>{formatDateDisplay(h.date)} · {h.description}</Text>)}
-    <SectionTitle>Linked expenses</SectionTitle>
-    {!linkedExpenses.length ? <Text>No expense transactions are linked to these allocations.</Text> : null}
-    {linkedExpenses.map(transaction => {
-      const allocation = allocations.find(item => item.id === transaction.allocationId);
-      const category = data.categories.find(item => item.id === allocation?.categoryId);
-      return <RecordLine key={transaction.id} title={transaction.description} detail={`${formatDateDisplay(transaction.date)} · ${category?.name ?? 'Budget category'} · ${formatMoney(transaction.amountCents)}`} onView={() => router.push({ pathname: '/transactions', params: { editId: transaction.id } })} onEdit={() => router.push({ pathname: '/transactions', params: { editId: transaction.id } })} onDelete={() => transactionCrud.confirmDelete(transaction.id)} />;
-    })}
-    {accountMoves.length ? <><SectionTitle>Account moves</SectionTitle>{accountMoves.map(move => <RecordLine key={move.id} title={move.description} detail={`${formatDateDisplay(move.date)} · ${formatMoney(move.amountCents)} · ${data.accounts.find(account => account.id === move.accountId)?.name ?? 'Account'} → ${data.accounts.find(account => account.id === move.toAccountId)?.name ?? 'Account'}`} onEdit={() => router.push({ pathname: '/transactions', params: { editId: move.id } })} onDelete={() => transactionCrud.confirmDelete(move.id)} />)}</> : null}
+  const transactionCrud = useCrud('transactions');
+  const p = data.paychecks.find(p => p.id === id);
+  if (!p) return <Page title="Paycheck"><Text>Paycheck not found.</Text><Action label="All paychecks" onPress={() => router.replace('/paychecks')} /></Page>;
+  const categories = data.allocations.filter(a => a.paycheckId === id);
+  const goals = data.contributions.filter(c => c.paycheckId === id);
+  const ids = new Set(categories.map(a => a.id));
+  const transactions = data.transactions.filter(t => t.paycheckId === id || (t.allocationId && ids.has(t.allocationId))).sort((a, b) => b.date.localeCompare(a.date));
+  const planned = p.status === 'planned';
+  const plan = () => router.push({ pathname: '/paycheck/plan/[id]', params: { id: p.id } });
+  return <Page title={p.source || 'Paycheck'}><Feedback />
+    <Text style={{ color: colors.muted }}>{planned ? 'Planned for' : 'Received'} {formatDateDisplay(p.receivedAt)}{p.budgetArchived ? ' · Budget archived' : ''}</Text>
+    <Card><Text style={{ color: colors.muted }}>{planned ? 'Expected income' : 'Paycheck amount'}</Text><Text style={{ fontSize: 32, lineHeight: 40, fontWeight: '800' }}>{formatMoney(p.amountCents)}</Text><ProgressBar value={allocatedForPaycheck(data, p.id)} max={p.amountCents} /><View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}><Metric label="Budgeted" amount={formatMoney(allocatedForPaycheck(data, p.id))} /><Metric label="Left to budget" amount={formatMoney(unallocatedForPaycheck(data, p.id))} caution={unallocatedForPaycheck(data, p.id) < 0} /></View><Text style={{ color: colors.muted, fontSize: 13 }}>{planned ? 'Planned money is not available to spend.' : p.accountId ? `Deposit recorded in ${data.accounts.find(a => a.id === p.accountId)?.name || 'account'}. Budget edits do not change this balance.` : 'Budget only · no account deposit recorded.'}</Text></Card>
+    {planned ? <Action label="Mark as received" variant="primary" fullWidth onPress={() => router.push({ pathname: '/paycheck/plan/[id]', params: { id: p.id, receive: '1' } })} /> : null}
+    <Action label={categories.length || goals.length ? 'Edit paycheck plan' : 'Budget this paycheck'} variant={planned ? 'secondary' : 'primary'} fullWidth onPress={plan} />
+    {p.plannedAmountCents !== undefined ? <Text style={{ color: colors.muted }}>Planned {formatMoney(p.plannedAmountCents)} · Received {formatMoney(p.amountCents)} · Difference {formatMoney(p.amountCents - p.plannedAmountCents)}</Text> : null}
+    <SectionTitle>Spending categories</SectionTitle>
+    {!categories.length ? <Text style={{ color: colors.muted }}>No categories yet. Add them in the paycheck plan.</Text> : null}
+    {categories.map(a => { const summary = allocationSummary(data, a); return <RecordLine key={a.id} title={data.categories.find(c => c.id === a.categoryId)?.name || 'Category'} amount={formatMoney(summary.remainingCents)} tone={summary.remainingCents < 0 ? 'caution' : 'default'} detail={`${planned ? 'Planned' : 'Remaining'} · ${formatMoney(a.amountCents)} budgeted · ${formatMoney(summary.spentCents)} spent`} onView={() => router.push({ pathname: '/allocation/[id]', params: { id: a.id } })} onEdit={plan} onDelete={() => allocationCrud.confirmDelete(a.id)} />; })}
+    <SectionTitle>Savings goals</SectionTitle>
+    {goals.length ? goals.map(c => <RecordLine key={c.id} title={data.goals.find(g => g.id === c.goalId)?.name || 'Goal'} amount={formatMoney(c.amountCents)} detail={`${planned ? 'Planned' : 'Set aside'} · no account transfer`} onView={() => router.push({ pathname: '/goal/[id]', params: { id: c.goalId } })} onEdit={plan} onDelete={() => contributionCrud.confirmDelete(c.id)} />) : <Text style={{ color: colors.muted }}>Add an existing savings goal in the paycheck plan.</Text>}
+    <Disclosure title="Paycheck details & account"><Text>{p.notes || 'No note added.'}</Text>{p.plannedAmountCents !== undefined ? <Text>Originally planned: {formatMoney(p.plannedAmountCents)} · Actual: {formatMoney(p.amountCents)} · Difference: {formatMoney(p.amountCents - p.plannedAmountCents)}</Text> : null}{p.remainingAccountId ? <Text>Remaining funds held in {data.accounts.find(a => a.id === p.remainingAccountId)?.name || 'account'}.</Text> : null}<Action label="Edit details or move remaining funds" onPress={() => router.push({ pathname: '/paychecks', params: { paycheckId: p.id } })} /><Action label={p.budgetArchived ? 'Restore budget' : 'Archive budget'} onPress={() => saveRecord('paychecks', { ...p, budgetArchived: !p.budgetArchived })} /><Action label="Delete paycheck…" destructive onPress={() => paycheckCrud.confirmDelete(p.id)} /></Disclosure>
+    {p.originalPlan ? <Disclosure title="Original plan before receipt"><Text>{formatDateDisplay(p.originalPlan.date)} · {formatMoney(p.originalPlan.amountCents)}</Text>{p.originalPlan.allocations.map(a => <Text key={a.id}>{data.categories.find(c => c.id === a.categoryId)?.name || 'Category'}: {formatMoney(a.amountCents)}</Text>)}{p.originalPlan.goals.map(c => <Text key={c.id}>{data.goals.find(g => g.id === c.goalId)?.name || 'Goal'}: {formatMoney(c.amountCents)}</Text>)}</Disclosure> : null}
+    <Disclosure title={`Allocation history (${p.allocationHistory?.length ?? 0})`}>{(p.allocationHistory ?? []).map(h => <Text key={h.id}>{formatDateDisplay(h.date)} · {h.description}</Text>)}</Disclosure>
+    <Disclosure title={`Linked activity (${transactions.length})`}>{transactions.map(t => <RecordLine key={t.id} title={t.description} detail={`${formatDateDisplay(t.date)} · ${t.type}`} amount={formatMoney(t.amountCents)} onEdit={() => router.push({ pathname: '/transactions', params: { editId: t.id } })} onDelete={() => transactionCrud.confirmDelete(t.id)} />)}</Disclosure>
   </Page>;
 }

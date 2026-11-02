@@ -3,7 +3,7 @@ import React from 'react';
 import { Link, useLocalSearchParams, useRouter } from 'expo-router';
 import { Text } from '../../src/design/Text';
 import { Hero } from '../../src/components/brand';
-import { Action, Feedback, Page, RecordLine } from '../../src/components/ui';
+import { Action, Disclosure, Feedback, Page, RecordLine } from '../../src/components/ui';
 import { useCrud } from '../../src/components/hooks';
 import { accountBalance, availableAccountBalance, pendingForAccount } from '../../src/domain/calculations';
 import { accruedInterestCents, nextInterestPostingPreview } from '../../src/domain/interest';
@@ -31,13 +31,13 @@ export default function AccountDetail() {
     <Hero label={account.type === 'credit_card' ? 'Credit card debt owed' : 'Actual account balance'} amount={formatMoney(accountBalance(data, account))} detail="Based on your recorded activity" />
     <Action label={account.type === 'credit_card' ? 'Make a card payment' : 'Transfer money'} onPress={() => router.push({ pathname: '/transaction/new', params: account.type === 'credit_card' ? { type: 'transfer', toAccountId: account.id } : { type: 'transfer', accountId: account.id } })} />
     {pendingForAccount(data, account.id) > 0 ? <><Text>Pending goal allocations: {formatMoney(pendingForAccount(data, account.id))}</Text>{available !== null ? <Text>Available after pending allocations: {formatMoney(available)}</Text> : <Text>Outstanding balance including pending: {formatMoney(accountBalance(data, account) + pendingForAccount(data, account.id))}</Text>}</> : null}
-    {earnsInterest ? <>
+    {earnsInterest ? <Disclosure title="Interest estimate & monthly posting">
       <Text>{account.type === 'credit_card' ? 'Interest rate (APR)' : 'Interest rate (APY)'}: {account.interestRatePercent ?? 0}%</Text>
       <Text>Accrued but uncredited estimate: {formatMoney(accruedInterest)}</Text>
       <Text>Credited interest charges/credits: {formatMoney(creditedInterest)}</Text>
       <Text style={{ color: colors.muted, fontSize: 12 }}>Simulation estimate only. It does not reproduce issuer billing rules. Savings use effective APY with daily compounding; cards estimate APR / 365.</Text>
       {postingPreview ? <><Text>Next completed statement month: {postingPreview.periodKey} · {formatMoney(postingPreview.amountCents)} estimated</Text><Action label={account.type === 'credit_card' ? 'Post monthly interest charge' : 'Credit monthly interest'} onPress={() => postMonthlyInterest(account.id)} /></> : null}
-    </> : null}
+    </Disclosure> : null}
     <Action label="Edit account" onPress={() => router.push({ pathname: '/accounts', params: { accountId: account.id } })} />
     <Action label="+ Add transaction" variant="primary" fullWidth onPress={() => router.push({ pathname: '/transaction/new', params: { accountId: account.id } })} />
     <Text style={{ fontWeight: '600' }}>Activity</Text>

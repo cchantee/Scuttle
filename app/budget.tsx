@@ -1,111 +1,72 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
-import { EmptyState, Eyebrow, Metric } from '../src/components/brand';
-import { Text } from '../src/design/Text';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Action, Field, Feedback, Page, RecordLine, SelectId } from '../src/components/ui';
-import { useCrud } from '../src/components/hooks';
-import { formatMoney, parseMoney } from '../src/domain/money';
-import { activeBudgetAllocations, allocationSummary, allocatedForPaycheck, nextSubscriptionDue, unallocatedForPaycheck } from '../src/domain/calculations';
+import { Text } from '../src/design/Text';
+import { colors } from '../src/design/theme';
+import { Action, Card, Disclosure, Feedback, Field, Page, RecordLine, SectionTitle, SelectId } from '../src/components/ui';
+import { EmptyState, Metric } from '../src/components/brand';
 import { useData } from '../src/state/DataProvider';
-import { calculateNextPayday, formatDateDisplay, todayISODate } from '../src/domain/date';
+import { useCrud } from '../src/components/hooks';
+import { activeBudgetAllocations, allocatedForPaycheck, allocationSummary, nextSubscriptionDue, newestPaychecks, unallocatedForPaycheck } from '../src/domain/calculations';
+import { formatMoney, parseMoney } from '../src/domain/money';
+import { formatDateDisplay, todayISODate } from '../src/domain/date';
 
 export default function Budget() {
+  const { data, saveRecord, planSubscription } = useData();
+  const router = useRouter();
+  const params = useLocalSearchParams<{ paycheckId?: string; allocationId?: string; add?: string }>();
   const categoryCrud = useCrud('categories');
   const allocationCrud = useCrud('allocations');
-  const { data, loading, saveRecord, planSubscription, reportError } = useData();
-  const params = useLocalSearchParams<{ paycheckId?: string; allocationId?: string; add?: string }>();
-  const router = useRouter();
-  const [categoryFormOpen, setCategoryFormOpen] = useState(false);
-  const [allocationFormOpen, setAllocationFormOpen] = useState(false);
+  const [tab, setTab] = useState('spending');
+  const initializedParams = useRef('');
   const [name, setName] = useState('');
-  const [paycheckId, setPaycheck] = useState(params.paycheckId ?? '');
-  const [categoryId, setCategory] = useState('');
+  const [allocationOpen, setAllocationOpen] = useState(false);
+  const [paycheckId, setPaycheckId] = useState('');
+  const [categoryId, setCategoryId] = useState('');
   const [amount, setAmount] = useState('');
-  const initializedAllocation = useRef('');
-  const upcomingPayday = data.user.nextPayday && data.user.paydayFrequency ? calculateNextPayday(data.user.nextPayday, todayISODate(), data.user.paydayFrequency, data.user.paydayIntervalDays) : data.user.nextPayday;
-  const upcomingSubscriptions = data.transactions.filter(item => item.type === 'subscription').map(item => ({ item, dueDate: nextSubscriptionDue(item, todayISODate()) })).filter((row): row is { item: typeof data.transactions[number]; dueDate: string } => !!row.dueDate && (!upcomingPayday || row.dueDate <= upcomingPayday)).sort((a, b) => a.dueDate.localeCompare(b.dueDate));
-  const planPaycheck = [...data.paychecks].filter(item => !item.budgetArchived).sort((a, b) => b.receivedAt.localeCompare(a.receivedAt))[0];
-
+  const [message, setMessage] = useState('');
   useEffect(() => {
-    if (params.add === '1') setAllocationFormOpen(true);
-    if (params.paycheckId) { setPaycheck(params.paycheckId); setAllocationFormOpen(true); }
-    if (!loading && params.allocationId && initializedAllocation.current !== params.allocationId) {
-      const allocation = data.allocations.find(item => item.id === params.allocationId);
-      if (allocation) {
-        setPaycheck(allocation.paycheckId);
-        setCategory(allocation.categoryId);
-        setAmount((allocation.amountCents / 100).toFixed(2));
-        allocationCrud.setEditingId(allocation.id);
-        setAllocationFormOpen(true);
-        initializedAllocation.current = allocation.id;
-      }
-    }
-  }, [params.paycheckId, params.allocationId, params.add, data.allocations, loading]);
-
-  const clearCategory = () => { setName(''); categoryCrud.cancel(); setCategoryFormOpen(false); };
-  const categorySave = async () => {
-    if (!name.trim()) return reportError('Enter a category name.');
-    const ok = await categoryCrud.submit({ name: name.trim() });
-    if (ok) clearCategory();
-  };
-  const clearAllocation = () => { setPaycheck(''); setCategory(''); setAmount(''); allocationCrud.cancel(); setAllocationFormOpen(false); };
-  const allocationSave = async () => {
-    try {
-      if (!paycheckId || !categoryId) return reportError('Choose a paycheck and category.');
-      const ok = await allocationCrud.submit({ paycheckId, categoryId, amountCents: parseMoney(amount) });
-      if (ok) clearAllocation();
-    } catch (e) { reportError(e instanceof Error ? e.message : 'Invalid allocation.'); }
-  };
-
+    const key = `${params.allocationId || ''}|${params.paycheckId || ''}|${params.add || ''}`;
+    if (initializedParams.current === key) return;
+    if (params.allocationId) {
+      const a = data.allocations.find(a => a.id === params.allocationId);
+      if (!a) return;
+      allocationCrud.setEditingId(a.id); setPaycheckId(a.paycheckId); setCategoryId(a.categoryId); setAmount((a.amountCents / 100).toFixed(2)); setAllocationOpen(true);
+    } else if (params.paycheckId || params.add === '1') { setPaycheckId(params.paycheckId || ''); setAllocationOpen(true); }
+    initializedParams.current = key;
+  }, [params.allocationId, params.paycheckId, params.add, data.allocations]);
   const active = activeBudgetAllocations(data);
-  const budgeted = active.reduce((sum, a) => sum + a.amountCents, 0);
+  const total = active.reduce((sum, a) => sum + a.amountCents, 0);
   const spent = active.reduce((sum, a) => sum + allocationSummary(data, a).spentCents, 0);
-  return <Page title="Your money plan."><Feedback /><Eyebrow>Give every dollar a direction</Eyebrow>
-    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}><Metric label="Category budget assigned" amount={formatMoney(budgeted)} detail="Received, active paychecks only" /><Metric label="Remaining category budget" amount={formatMoney(budgeted - spent)} caution={budgeted < spent} detail={`${formatMoney(spent)} recorded spending`} /></View>
-    <Text>Categories and allocations are tracked separately for each paycheck.</Text>
-    <Text style={{ fontWeight: '600', fontSize: 17 }}>Upcoming subscriptions</Text>
-    <Text>Budget for these scheduled charges before they are due.</Text>
-    {!upcomingSubscriptions.length ? <Text>No upcoming subscription charges before your next payday.</Text> : upcomingSubscriptions.map(({ item, dueDate }) => {
-      const planned = !!planPaycheck && data.allocations.some(allocation => allocation.subscriptionId === item.id && allocation.paycheckId === planPaycheck.id);
-      return <React.Fragment key={item.id}><RecordLine title={item.description} detail={`${formatMoney(item.amountCents)} · Due ${formatDateDisplay(dueDate)}${item.categoryId ? ` · ${data.categories.find(category => category.id === item.categoryId)?.name ?? 'Category'}` : ''}${item.accountId ? ` · ${data.accounts.find(account => account.id === item.accountId)?.name ?? 'Account'}` : ''}`} onEdit={() => router.push({ pathname: '/transactions', params: { editId: item.id } })} onDelete={() => router.push({ pathname: '/transactions', params: { editId: item.id } })} />{planned ? <Text>Included in paycheck plan · {formatDateDisplay(planPaycheck!.receivedAt)}</Text> : <Action label="Add to paycheck plan" onPress={() => planSubscription(item.id)} />}</React.Fragment>;
-    })}
-    {!categoryFormOpen ? <Action label="+ Add category" variant="primary" fullWidth onPress={() => setCategoryFormOpen(true)} /> : <>
-      <Field label={categoryCrud.editingId ? 'Category name' : 'New category name'} value={name} onChangeText={setName} />
-      <Action label="Save category" variant="primary" fullWidth onPress={() => categorySave()} />
-      <Action label="Cancel" onPress={clearCategory} />
-    </>}
-    {!data.categories.length ? <EmptyState title="Make space for everyday life." detail="Create categories for the things you spend on, then assign money from a paycheck." /> : null}
-    {data.categories.map(category => <RecordLine key={category.id} title={category.name} detail="Budget category" onEdit={() => { setName(category.name); categoryCrud.setEditingId(category.id); setCategoryFormOpen(true); }} onDelete={() => categoryCrud.confirmDelete(category.id)} />)}
-
-    {!allocationFormOpen ? <Action label="+ Allocate paycheck" variant="primary" fullWidth onPress={() => setAllocationFormOpen(true)} /> : <>
-      <SelectId label="Paycheck" choices={data.paychecks.map(item => ({ id: item.id, title: `${item.status === 'planned' ? 'Planned · ' : ''}${formatDateDisplay(item.receivedAt)} · ${formatMoney(item.amountCents)}`}))} value={paycheckId} onChange={setPaycheck} />
-      <SelectId label="Category" choices={data.categories.map(item => ({ id: item.id, title: item.name }))} value={categoryId} onChange={setCategory} create="category" />
-      <Field label="Allocated amount" value={amount} onChangeText={setAmount} keyboardType="decimal-pad" placeholder="0.00" />
-      <Action label="Save allocation" variant="primary" fullWidth onPress={() => allocationSave()} />
-      <Action label="Cancel" onPress={clearAllocation} />
-    </>}
-
-    <Text style={{ fontWeight: '600', fontSize: 17 }}>Active paycheck budgets</Text>
-    {!data.paychecks.some(paycheck => !paycheck.budgetArchived && data.allocations.some(item => item.paycheckId === paycheck.id)) ? <Text>No active paycheck budgets. Add allocations to start budgeting.</Text> : null}
-    {data.paychecks.filter(paycheck => !paycheck.budgetArchived && data.allocations.some(item => item.paycheckId === paycheck.id)).map(paycheck => <React.Fragment key={paycheck.id}>
-      <Text>{paycheck.status === 'planned' ? 'Planned · unavailable to spend · ' : ''}{formatDateDisplay(paycheck.receivedAt)}: {formatMoney(allocatedForPaycheck(data, paycheck.id))} allocated · {formatMoney(unallocatedForPaycheck(data, paycheck.id))} unallocated</Text>
-      <Action label="Archive this paycheck budget" onPress={() => { void saveRecord('paychecks', { ...paycheck, budgetArchived: true }); }} />
-      {data.allocations.filter(item => item.paycheckId === paycheck.id).map(allocation => <AllocationLine key={allocation.id} allocation={allocation} data={data} router={router} onEdit={() => { setPaycheck(allocation.paycheckId); setCategory(allocation.categoryId); setAmount((allocation.amountCents / 100).toFixed(2)); allocationCrud.setEditingId(allocation.id); setAllocationFormOpen(true); }} onDelete={() => allocationCrud.confirmDelete(allocation.id)} />)}
-    </React.Fragment>)}
-
-    <Text style={{ fontWeight: '600', fontSize: 17 }}>Archived paycheck budgets</Text>
-    {!data.paychecks.some(paycheck => paycheck.budgetArchived && data.allocations.some(item => item.paycheckId === paycheck.id)) ? <Text>No archived paycheck budgets.</Text> : null}
-    {data.paychecks.filter(paycheck => paycheck.budgetArchived && data.allocations.some(item => item.paycheckId === paycheck.id)).map(paycheck => <React.Fragment key={paycheck.id}>
-      <Text>{paycheck.status === 'planned' ? 'Planned · unavailable to spend · ' : ''}{formatDateDisplay(paycheck.receivedAt)}: {formatMoney(allocatedForPaycheck(data, paycheck.id))} allocated · {formatMoney(unallocatedForPaycheck(data, paycheck.id))} unallocated</Text>
-      <Action label="Restore paycheck budget" onPress={() => { void saveRecord('paychecks', { ...paycheck, budgetArchived: false }); }} />
-      {data.allocations.filter(item => item.paycheckId === paycheck.id).map(allocation => <AllocationLine key={allocation.id} allocation={allocation} data={data} router={router} onEdit={() => { setPaycheck(allocation.paycheckId); setCategory(allocation.categoryId); setAmount((allocation.amountCents / 100).toFixed(2)); allocationCrud.setEditingId(allocation.id); setAllocationFormOpen(true); }} onDelete={() => allocationCrud.confirmDelete(allocation.id)} />)}
-    </React.Fragment>)}
+  const paychecks = newestPaychecks(data.paychecks.filter(p => tab === 'archived' ? p.budgetArchived : tab === 'planned' ? !p.budgetArchived && p.status === 'planned' : !p.budgetArchived && p.status !== 'planned'));
+  const planPaycheck = newestPaychecks(data.paychecks.filter(p => !p.budgetArchived))[0];
+  const subscriptions = data.transactions.filter(t => t.type === 'subscription').map(t => ({ t, due: nextSubscriptionDue(t, todayISODate()) })).filter(row => row.due).sort((a, b) => a.due!.localeCompare(b.due!));
+  const saveAllocation = async () => {
+    try { if (!paycheckId || !categoryId) { setMessage('Choose a paycheck and a category.'); return; } if (await allocationCrud.submit({ paycheckId, categoryId, amountCents: parseMoney(amount) })) { setAllocationOpen(false); setMessage(''); } }
+    catch { setMessage('Enter a valid dollar amount.'); }
+  };
+  return <Page title="Budget"><Feedback />
+    {!allocationOpen ? <>
+      {tab === 'spending' ? <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}><Metric label="Left in spending categories" amount={formatMoney(total - spent)} caution={spent > total} detail={`${formatMoney(spent)} spent of ${formatMoney(total)} budgeted`} /></View> : null}
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>{[{ id: 'spending', title: 'Spending' }, { id: 'planned', title: 'Planned' }, { id: 'archived', title: 'Archived' }].map(t => <Action key={t.id} label={t.title} selected={tab === t.id} variant={tab === t.id ? 'primary' : 'secondary'} onPress={() => setTab(t.id)} />)}</View>
+      {tab === 'planned' ? <Text style={{ color: colors.muted }}>These plans use expected income. They are not part of your spending budget yet.</Text> : tab === 'archived' ? <Text style={{ color: colors.muted }}>Archived budgets stay in history. Restore one to use its category balances again.</Text> : null}
+      {!paychecks.length ? <EmptyState title={tab === 'spending' ? 'Build your spending plan.' : `No ${tab} budgets.`} detail={tab === 'spending' ? 'Add a paycheck, then choose the amounts your categories need.' : 'Other budgets are available in the adjacent tabs.'}>{tab === 'spending' ? <Action label="Add paycheck" variant="primary" onPress={() => router.push({ pathname: '/paychecks', params: { add: '1' } })} /> : null}</EmptyState> : null}
+      {paychecks.map(p => <View key={p.id} style={{ gap: 12 }}><SectionTitle>{p.source || 'Paycheck'} · {formatDateDisplay(p.receivedAt)}</SectionTitle><Text style={{ color: colors.muted }}>{formatMoney(p.amountCents)} {p.status === 'planned' ? 'expected' : 'received'} · {formatMoney(unallocatedForPaycheck(data, p.id))} left to budget</Text>
+        <Action label={`Edit plan${p.source ? ` · ${p.source}` : ''}`} fullWidth onPress={() => router.push({ pathname: '/paycheck/plan/[id]', params: { id: p.id } })} />
+        {data.allocations.filter(a => a.paycheckId === p.id).map(a => { const summary = allocationSummary(data, a); return <RecordLine key={a.id} title={data.categories.find(c => c.id === a.categoryId)?.name || 'Category'} amount={`${formatMoney(Math.abs(summary.remainingCents))} ${summary.remainingCents < 0 ? 'over budget' : 'remaining'}`} tone={summary.remainingCents < 0 ? 'caution' : 'default'} detail={`${formatMoney(a.amountCents)} budgeted · ${formatMoney(summary.spentCents)} spent${a.subscriptionId ? ' · recurring bill' : ''}`} progress={{ value: summary.spentCents, max: a.amountCents, label: `${a.amountCents ? Math.round(summary.spentCents / a.amountCents * 100) : 0}% spent` }} onView={() => router.push({ pathname: '/allocation/[id]', params: { id: a.id } })} onEdit={() => router.push({ pathname: '/paycheck/plan/[id]', params: { id: p.id } })} onDelete={() => allocationCrud.confirmDelete(a.id)} />; })}
+        <Disclosure title={`Options · ${p.source || formatDateDisplay(p.receivedAt)}`}><Text>{formatMoney(allocatedForPaycheck(data, p.id))} total assigned to categories and goals.</Text><Action label="Open paycheck details" onPress={() => router.push({ pathname: '/paycheck/[id]', params: { id: p.id } })} /><Action label={p.budgetArchived ? 'Restore budget' : 'Archive budget'} onPress={() => saveRecord('paychecks', { ...p, budgetArchived: !p.budgetArchived })} /></Disclosure>
+      </View>)}
+    </> : <Card><SectionTitle>{allocationCrud.editingId ? 'Edit category amount' : 'Add category amount'}</SectionTitle><SelectId label="Paycheck" choices={data.paychecks.map(p => ({ id: p.id, title: `${p.source || 'Paycheck'} · ${formatDateDisplay(p.receivedAt)} · ${formatMoney(p.amountCents)}` }))} value={paycheckId} onChange={setPaycheckId} /><SelectId label="Category" choices={data.categories.map(c => ({ id: c.id, title: c.name }))} value={categoryId} onChange={setCategoryId} create="category" /><Field label="Amount ($)" value={amount} onChangeText={setAmount} keyboardType="decimal-pad" />{message ? <Text style={{ color: colors.danger }}>{message}</Text> : null}<Action label="Save category amount" variant="primary" fullWidth onPress={saveAllocation} /><Action label="Cancel" onPress={() => { setAllocationOpen(false); allocationCrud.cancel(); }} /></Card>}
+    <Disclosure title="Manage categories">
+      <Text style={{ color: colors.muted }}>Categories are reusable names. Their budget amounts belong to individual paychecks.</Text>
+      <Field label={categoryCrud.editingId ? 'Rename category' : 'New category name'} value={name} onChangeText={setName} />
+      <Action label={categoryCrud.editingId ? 'Save name' : 'Create category'} onPress={async () => { if (await categoryCrud.submit({ name: name.trim() })) { setName(''); } }} />
+      {data.categories.map(c => <RecordLine key={c.id} title={c.name} detail="Budget category" onEdit={() => { categoryCrud.setEditingId(c.id); setName(c.name); }} onDelete={() => categoryCrud.confirmDelete(c.id)} />)}
+    </Disclosure>
+    <Disclosure title={`Recurring bills (${subscriptions.length})`}>
+      <Text style={{ color: colors.muted }}>These are reminders. Log paid charges as expenses to update your balances.</Text>
+      {subscriptions.map(({ t, due }) => { const included = planPaycheck && data.allocations.some(a => a.subscriptionId === t.id && a.paycheckId === planPaycheck.id); return <Card key={t.id}><Text style={{ fontWeight: '700' }}>{t.description} · {formatMoney(t.amountCents)}</Text><Text>Next due {formatDateDisplay(due!)}</Text><Action label="Edit recurring bill" variant="text" onPress={() => router.push({ pathname: '/transactions', params: { editId: t.id } })} />{included ? <Text>Included in {planPaycheck.source || 'latest paycheck'}.</Text> : <><Text style={{ color: colors.muted, fontSize: 13 }}>{planPaycheck ? `Add to ${planPaycheck.source || 'paycheck'} · ${formatDateDisplay(planPaycheck.receivedAt)}` : 'Add a paycheck before planning this bill.'}</Text><Action label="Add to latest paycheck plan" disabled={!planPaycheck} onPress={() => planSubscription(t.id)} /></>}</Card>; })}
+      <Action label="Add recurring bill" onPress={() => router.push({ pathname: '/transaction/new', params: { type: 'subscription' } })} />
+    </Disclosure>
   </Page>;
-}
-
-function AllocationLine({ allocation, data, router, onEdit, onDelete }: { allocation: (typeof data.allocations)[number]; data: ReturnType<typeof useData>['data']; router: ReturnType<typeof useRouter>; onEdit: () => void; onDelete: () => void }) {
-  const summary = allocationSummary(data, allocation);
-  const category = data.categories.find(item => item.id === allocation.categoryId);
-  return <RecordLine progress={{ value: summary.spentCents, max: summary.allocatedCents, label: summary.remainingCents < 0 ? `${formatMoney(-summary.remainingCents)} over budget` : `${formatMoney(summary.remainingCents)} remaining` }} title={category?.name ?? 'Unknown category'} detail={`${formatMoney(summary.allocatedCents)} allocated · ${formatMoney(summary.spentCents)} spent · ${formatMoney(summary.remainingCents)} left`} onView={() => router.push({ pathname: '/allocation/[id]', params: { id: allocation.id } })} onEdit={onEdit} onDelete={onDelete} />;
 }

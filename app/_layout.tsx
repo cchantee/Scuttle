@@ -26,6 +26,7 @@ function Routes() {
       <Stack.Screen name="more" />
       <Stack.Screen name="profile" options={{ title: 'Profile' }} />
       <Stack.Screen name="account/[id]" options={{ title: 'Account details' }} />
+      <Stack.Screen name="paycheck/plan/[id]" options={{ title: 'Paycheck plan' }} />
       <Stack.Screen name="paycheck/[id]" options={{ title: 'Paycheck details' }} />
       <Stack.Screen name="allocation/[id]" options={{ title: 'Budget details' }} />
       <Stack.Screen name="goal/[id]" options={{ title: 'Goal details' }} />

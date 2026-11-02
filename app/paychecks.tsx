@@ -1,86 +1,82 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { useLocalSearchParams, useRouter } from 'expo-router';
 import { View } from 'react-native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Text } from '../src/design/Text';
-import { Action, DateField, Field, Feedback, Page, RecordLine, SelectId } from '../src/components/ui';
+import { colors } from '../src/design/theme';
+import { Action, Card, DateField, Disclosure, Feedback, Field, Page, RecordLine, SelectId } from '../src/components/ui';
+import { EmptyState } from '../src/components/brand';
 import { useCrud } from '../src/components/hooks';
+import { newId, Paycheck } from '../src/domain/models';
+import { allocatedForPaycheck, newestPaychecks, unallocatedForPaycheck } from '../src/domain/calculations';
 import { formatMoney, parseMoney } from '../src/domain/money';
-import { EmptyState, Eyebrow } from '../src/components/brand';
-import { Paycheck } from '../src/domain/models';
-import { allocatedForPaycheck, unallocatedForPaycheck } from '../src/domain/calculations';
-import { useData } from '../src/state/DataProvider';
 import { formatDateDisplay, formatDateInput, normalizeDateInput, todayDateInput } from '../src/domain/date';
+import { useData } from '../src/state/DataProvider';
 import { TourHighlight } from '../src/components/walkthrough';
 
 export default function Paychecks() {
+  const { data, loading, saveRecord, movePaycheckToAccount } = useData();
   const crud = useCrud('paychecks');
   const router = useRouter();
-  const { data, movePaycheckToAccount, reportError } = useData();
   const params = useLocalSearchParams<{ paycheckId?: string; add?: string }>();
-  const initializedId = useRef('');
-  const [formOpen, setFormOpen] = useState(false);
+  const initialized = useRef('');
+  const id = useRef(newId());
+  const busy = useRef(false);
+  const [open, setOpen] = useState(params.add === '1');
   const [amount, setAmount] = useState('');
   const [date, setDate] = useState(todayDateInput());
   const [source, setSource] = useState('');
   const [notes, setNotes] = useState('');
-  const [fundingMode, setFundingMode] = useState<'planned' | 'paycheck' | 'account' | ''>('');
+  const [status, setStatus] = useState<'received' | 'planned'>('received');
   const [accountId, setAccountId] = useState('');
-  useEffect(() => { if (params.add === '1' && !params.paycheckId) setFormOpen(true); }, [params.add, params.paycheckId]);
-  useEffect(() => {
-    if (!params.paycheckId || initializedId.current === params.paycheckId) return;
-    const paycheck = data.paychecks.find(item => item.id === params.paycheckId);
-    if (!paycheck) return;
-    setAmount((paycheck.amountCents / 100).toFixed(2)); setDate(formatDateInput(paycheck.receivedAt)); setSource(paycheck.source ?? ''); setNotes(paycheck.notes ?? ''); setAccountId(paycheck.remainingAccountId ?? paycheck.accountId ?? ''); setFundingMode(paycheck.status === 'planned' ? 'planned' : paycheck.accountId ? 'account' : 'paycheck');
-    crud.setEditingId(paycheck.id); setFormOpen(true); initializedId.current = paycheck.id;
-  }, [params.paycheckId, data.paychecks]);
-  const reset = () => { setAmount(''); setDate(todayDateInput()); setSource(''); setNotes(''); setAccountId(''); setFundingMode(''); crud.cancel(); setFormOpen(false); };
-  const submit = async () => {
+  const [editingId, setEditingId] = useState('');
+  const [filter, setFilter] = useState('all');
+  const [message, setMessage] = useState('');
+  const existing = data.paychecks.find(p => p.id === editingId);
+  const fill = (p: Paycheck) => { setEditingId(p.id); setAmount((p.amountCents / 100).toFixed(2)); setDate(formatDateInput(p.receivedAt)); setSource(p.source || ''); setNotes(p.notes || ''); setStatus(p.status === 'planned' ? 'planned' : 'received'); setAccountId(p.remainingAccountId || p.accountId || ''); setMessage(''); setOpen(true); };
+  useEffect(() => { if (params.add === '1' && !params.paycheckId) { reset(); setOpen(true); } }, [params.add]);
+  useEffect(() => { const p = data.paychecks.find(p => p.id === params.paycheckId); if (p && initialized.current !== p.id) { initialized.current = p.id; fill(p); } }, [data.paychecks, params.paycheckId]);
+  const reset = () => { setOpen(false); setEditingId(''); setAmount(''); setDate(todayDateInput()); setSource(''); setNotes(''); setStatus('received'); setAccountId(''); setMessage(''); id.current = newId(); };
+  const save = async () => {
+    if (busy.current) return;
+    busy.current = true; setMessage('');
     try {
+      const income = parseMoney(amount);
       const receivedAt = normalizeDateInput(date);
-      if (!receivedAt) return reportError('Enter a valid date as M/D/YYYY.');
-      if (!fundingMode) return reportError('Choose whether to budget this paycheck on its own or record it in an account.');
-      if (fundingMode === 'account' && !accountId) return reportError('Choose the account where this paycheck was deposited.');
-      const existing = data.paychecks.find(item => item.id === crud.editingId);
-      if (existing?.accountId && fundingMode === 'paycheck') return reportError('This paycheck is already recorded in an account. Choose an account to move its remaining funds.');
-      const amountCents = parseMoney(amount);
-      const ok = await crud.submit({ ...existing, status: fundingMode === 'planned' ? 'planned' : 'received', amountCents, receivedAt, source: source || undefined, notes: notes || undefined,
-        accountId: existing?.accountId ?? (!existing && fundingMode === 'account' ? accountId : undefined),
-        accountCreditCents: existing?.accountCreditCents ?? (!existing && fundingMode === 'account' ? amountCents : undefined),
-        remainingAccountId: existing?.remainingAccountId ?? existing?.accountId ?? (!existing && fundingMode === 'account' ? accountId : undefined),
-        budgetArchived: existing?.budgetArchived });
-      if (!ok) return;
-      if (existing && fundingMode === 'account' && accountId !== (existing.remainingAccountId ?? existing.accountId)) {
-        if (!await movePaycheckToAccount(existing.id, accountId)) return;
-      }
+      if (income <= 0) { setMessage('Enter an amount greater than zero.'); return; }
+      if (!receivedAt) { setMessage('Enter a valid paycheck date.'); return; }
+      if (existing?.accountId && !accountId) { setMessage('Choose the account holding this paycheck. A recorded deposit cannot become a standalone budget.'); return; }
+      const record: Paycheck = { ...existing, id: existing?.id || id.current, amountCents: income, receivedAt, status, source: source.trim() || undefined, notes: notes.trim() || undefined,
+        accountId: status === 'planned' ? undefined : existing?.accountId || (!existing ? accountId || undefined : undefined),
+        accountCreditCents: status === 'planned' ? undefined : existing?.accountCreditCents ?? (!existing && accountId ? income : undefined),
+        remainingAccountId: status === 'planned' ? undefined : existing?.remainingAccountId || existing?.accountId || (!existing ? accountId || undefined : undefined),
+      };
+      if (!await saveRecord('paychecks', record)) return;
+      if (existing && accountId && accountId !== (existing.remainingAccountId || existing.accountId) && !await movePaycheckToAccount(existing.id, accountId)) return;
+      const paycheckId = record.id;
+      const wasEditing = Boolean(existing);
       reset();
-    } catch (e) { reportError(e instanceof Error ? e.message : 'Invalid paycheck.'); }
+      router.replace({ pathname: wasEditing ? '/paycheck/[id]' : '/paycheck/plan/[id]', params: { id: paycheckId } });
+    } catch { setMessage('Use a dollar amount with up to two decimal places, such as 1234.56.'); }
+    finally { busy.current = false; }
   };
-  return <Page title="Paychecks"><TourHighlight id="paychecks-main"><Feedback /><Eyebrow>Make each payday manageable</Eyebrow><Text>Plan ahead or record income you’ve received. Assigning money never deposits it again.</Text>
-    {!formOpen ? <Action label="+ Add paycheck" variant="primary" fullWidth onPress={() => setFormOpen(true)} /> : <>
-      <Field label={fundingMode === 'planned' ? "Expected amount" : "Amount received"} value={amount} onChangeText={setAmount} keyboardType="decimal-pad" placeholder="0.00" />
-      <DateField label={fundingMode === 'planned' ? "Expected payment date" : "Date received"} value={date} onChangeText={setDate} />
-      <Field label="Income source (optional)" value={source} onChangeText={setSource} />
-      <Text style={{ fontWeight: '600' }}>Where should this paycheck be recorded?</Text>
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-        {(!crud.editingId || data.paychecks.find(p => p.id === crud.editingId)?.status === 'planned') ? <Action label="Plan future paycheck" variant={fundingMode === 'planned' ? 'primary' : 'secondary'} onPress={() => setFundingMode('planned')} /> : null}
-        <Action label="Budget paycheck only" variant={fundingMode === 'paycheck' ? 'primary' : 'secondary'} onPress={() => setFundingMode('paycheck')} />
-        <Action label="Deposit to an account" variant={fundingMode === 'account' ? 'primary' : 'secondary'} onPress={() => setFundingMode('account')} />
-      </View>
-      {fundingMode === 'account' ? <>
-        <Text>Recording a deposit updates the account balance. Paycheck allocations remain separate and do not deposit the money again.</Text>
-        <SelectId label={crud.editingId ? 'Move remaining funds to account' : 'Deposit account'} choices={data.accounts.map(item => ({ id: item.id, title: `${item.name}${item.type === 'credit_card' ? ' · card debt' : ''}`}))} value={accountId} onChange={setAccountId} create="account" />
-        {crud.editingId ? <Text>Only unspent funds move. This paycheck’s allocations and linked expenses stay in its history.</Text> : null}
-      </> : null}
-      <Field label="Notes (optional)" value={notes} onChangeText={setNotes} multiline />
-      <Action label="Save paycheck" variant="primary" fullWidth onPress={() => submit()} />
-      <Action label="Cancel" onPress={reset} />
+  if (!loading && params.paycheckId && !data.paychecks.some(p => p.id === params.paycheckId)) return <Page title="Paycheck not found"><Text>This paycheck no longer exists.</Text><Action label="All paychecks" onPress={() => router.replace('/paychecks')} /></Page>;
+  const paychecks = newestPaychecks(data.paychecks.filter(p => filter === 'all' || (p.status === 'planned' ? 'planned' : 'received') === filter));
+  return <Page title={open ? editingId ? 'Edit paycheck' : 'Add paycheck' : 'Paychecks'}><Feedback /><TourHighlight id="paychecks-main">
+    {open ? <>
+      {!editingId ? <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}><Action label="Received" selected={status === 'received'} variant={status === 'received' ? 'primary' : 'secondary'} onPress={() => setStatus('received')} /><Action label="Plan ahead" selected={status === 'planned'} variant={status === 'planned' ? 'primary' : 'secondary'} onPress={() => setStatus('planned')} /></View> : null}
+      <Text style={{ color: colors.muted }}>{status === 'planned' ? 'Plan expected income now. It won’t affect your account balance until you mark it received.' : 'Add your pay, then budget it on the next screen.'}</Text>
+      {existing?.actualAmountCents !== undefined ? <Card><Text>Confirmed income: {formatMoney(existing.amountCents)}</Text><Text style={{ color: colors.muted, fontSize: 13 }}>The received amount is fixed. You can still change how it is budgeted.</Text></Card> : <Field label={status === 'planned' ? 'Expected amount ($)' : 'Amount received ($)'} value={amount} onChangeText={setAmount} keyboardType="decimal-pad" placeholder="0.00" />}
+      <DateField label={status === 'planned' ? 'Expected payday' : 'Date received'} value={date} onChangeText={setDate} />
+      {status === 'received' ? <><SelectId label={existing ? 'Account holding remaining funds' : 'Deposit account (optional)'} value={accountId} onChange={setAccountId} choices={data.accounts.map(a => ({ id: a.id, title: a.name }))} create="account" /><Text style={{ color: colors.muted, fontSize: 13 }}>{accountId ? existing?.accountId ? 'Changing the account records a transfer of the unspent funds.' : 'This records the deposit once. Do not also add it as a separate income transaction.' : 'No account selected: this will track a paycheck budget only.'}</Text></> : null}
+      <Field label="Paycheck name (optional)" value={source} onChangeText={setSource} placeholder="e.g. Work, freelance" />
+      <Disclosure title="Add a note" initiallyOpen={Boolean(existing?.notes)}><Field label="Note" value={notes} onChangeText={setNotes} multiline /></Disclosure>
+      {message ? <Text accessibilityRole="alert" style={{ color: colors.danger }}>{message}</Text> : null}
+      <Action label={editingId ? 'Save paycheck' : 'Save paycheck & budget'} variant="primary" fullWidth onPress={save} /><Action label="Cancel" onPress={reset} />
+    </> : <>
+      <Action label="Add paycheck" variant="primary" fullWidth onPress={() => { reset(); setOpen(true); }} />
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>{['all', 'received', 'planned'].map(value => <Action key={value} label={value[0].toUpperCase() + value.slice(1)} selected={filter === value} variant={filter === value ? 'primary' : 'secondary'} onPress={() => setFilter(value)} />)}</View>
+      {!paychecks.length ? <EmptyState title="Give your next paycheck a plan." detail="Record income you have received, or plan expected pay before it arrives." /> : null}
+      {paychecks.map(p => <RecordLine key={p.id} title={p.source || 'Paycheck'} amount={formatMoney(p.amountCents)} detail={`${p.status === 'planned' ? 'Planned' : 'Received'} · ${formatDateDisplay(p.receivedAt)}${p.budgetArchived ? ' · Archived budget' : ''} · ${formatMoney(unallocatedForPaycheck(data, p.id))} left to budget`} progress={{ value: allocatedForPaycheck(data, p.id), max: p.amountCents, label: `${Math.round(allocatedForPaycheck(data, p.id) / p.amountCents * 100)}% budgeted` }} onView={() => router.push({ pathname: '/paycheck/[id]', params: { id: p.id } })} onEdit={() => fill(p)} onDelete={() => crud.confirmDelete(p.id)} />)}
     </>}
-    {!data.paychecks.length ? <EmptyState title="Every paycheck gets a plan." detail="Add expected pay now, or record a paycheck that has arrived. Your allocations stay editable." /> : null}
-    {([...data.paychecks] as Paycheck[]).sort((a, b) => b.receivedAt.localeCompare(a.receivedAt)).map(p => {
-      const depositName = data.accounts.find(account => account.id === p.accountId)?.name;
-      const currentFundsName = data.accounts.find(account => account.id === (p.remainingAccountId ?? p.accountId))?.name;
-      const accountDetail = p.accountId ? `Deposited to ${depositName ?? 'account'}${currentFundsName && currentFundsName !== depositName ? ` · remaining funds moved to ${currentFundsName}` : ''} · ` : 'Paycheck only · ';
-      return <RecordLine key={p.id} title={`${p.status === 'planned' ? 'Planned · ' : 'Received · '}${formatDateDisplay(p.receivedAt)} · ${formatMoney(p.amountCents)}`} detail={`${p.source ?? 'Income'} · ${accountDetail}${formatMoney(allocatedForPaycheck(data, p.id))} allocated · ${formatMoney(unallocatedForPaycheck(data, p.id))} left`} progress={{ value: allocatedForPaycheck(data, p.id), max: p.amountCents, label: `${p.amountCents ? Math.round(allocatedForPaycheck(data, p.id) / p.amountCents * 100) : 0}% allocated` }} onView={() => router.push({ pathname: '/paycheck/[id]', params: { id: p.id } })} onEdit={() => { setAmount((p.amountCents / 100).toFixed(2)); setDate(formatDateInput(p.receivedAt)); setSource(p.source ?? ''); setNotes(p.notes ?? ''); setAccountId(p.remainingAccountId ?? p.accountId ?? ''); setFundingMode(p.status === 'planned' ? 'planned' : p.accountId ? 'account' : 'paycheck'); crud.setEditingId(p.id); setFormOpen(true); }} onDelete={() => crud.confirmDelete(p.id)} />;
-    })}
   </TourHighlight></Page>;
 }

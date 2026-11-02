@@ -8,18 +8,11 @@ import { useData } from '../state/DataProvider';
 const ink = colors.text;
 const muted = colors.muted;
 export const walkthroughSteps = [
-  { route: '/', target: 'nav-home', title: 'Home', body: 'Your paycheck plan and key updates live here.', placement: 'bottom' },
-  { route: '/', target: 'home-quick-views', title: 'Quick views', body: 'Switch the summary between paychecks, accounts, and savings.', placement: 'bottom' },
-  { route: '/', target: 'home-next-payday', title: 'Next payday', body: 'Set a date and pay schedule for your countdown.', placement: 'bottom' },
-  { route: '/', target: 'nav-add', title: 'Add menu', body: 'The plus button opens shortcuts for expenses, income, transfers, and paychecks.', placement: 'top' },
-  { route: '/accounts', target: 'accounts-main', title: 'Accounts', body: 'Track cash balances and credit card debt separately.', placement: 'bottom' },
-  { route: '/paychecks', target: 'paychecks-main', title: 'Paychecks', body: 'Log income, then budget it across categories.', placement: 'bottom' },
-  { route: '/budget', target: 'nav-budget', title: 'Budgets', body: 'Create categories and assign paycheck amounts.', placement: 'bottom' },
-  { route: '/transaction/new', target: 'expense-main', title: 'Expenses', body: 'Log a purchase, then choose its category and account.', placement: 'bottom' },
-  { route: '/goals', target: 'goals-main', title: 'Savings goals', body: 'Track goal progress with separate contributions.', placement: 'bottom' },
-  { route: '/more', target: 'more-main', title: 'More tools', body: 'Find transactions and your financial history here.', placement: 'bottom' },
-  { route: '/', target: 'home-quick-actions', title: 'Quick actions', body: 'Start common tasks from Home or the plus button.', placement: 'top' },
-  { route: '/', target: 'home-active-budgets', title: 'Active budgets', body: 'See what remains in your current paycheck plan.', placement: 'top' },
+  { route: '/', target: 'home-quick-views', title: 'Two different balances', body: 'Your category budget is what you planned to spend. Account balances reflect money you recorded in your accounts.', placement: 'bottom' },
+  { route: '/', target: 'nav-add', title: 'One place to add activity', body: 'Add a paycheck, log spending or income, or record a transfer. Transfers are not expenses.', placement: 'top' },
+  { route: '/paychecks', target: 'paychecks-main', title: 'Budget a paycheck in one pass', body: 'Add your pay, enter category and goal amounts together, and save one plan. Planned pay stays separate until you receive it.', placement: 'bottom' },
+  { route: '/budget', target: 'nav-budget', title: 'Check spending at a glance', body: 'Review remaining category money. Planned and archived budgets have their own tabs.', placement: 'bottom' },
+  { route: '/more', target: 'more-main', title: 'Accounts, goals, and settings', body: 'Open account balances, savings goals, and other tools here. You can replay this short tour at any time.', placement: 'bottom' },
 ];
 
 type TourContextValue = { active: boolean; index: number; start: () => void; next: () => void; previous: () => void; finish: () => Promise<void> };
@@ -60,7 +53,7 @@ export function WalkthroughOverlay() {
   const isLast = tour.index === walkthroughSteps.length - 1;
   return <View pointerEvents="box-none" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: step.placement === 'top' ? 'flex-start' : 'flex-end', paddingHorizontal: 14, paddingTop: step.placement === 'top' ? 56 : 0, paddingBottom: step.placement === 'bottom' ? 94 : 0 }}>
     <View accessibilityRole="summary" style={{ padding: 15, gap: 9, borderWidth: 2, borderColor: ink, borderRadius: 12, backgroundColor: colors.surface, shadowColor: colors.text, shadowOpacity: 0.22, shadowRadius: 8, elevation: 12 }}>
-      <Text style={{ color: muted, fontSize: 12 }}>Step {tour.index + 1} of {walkthroughSteps.length}</Text>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}><TourButton label="Skip tour" onPress={() => void tour.finish().catch(error => reportError(error instanceof Error ? error.message : 'Could not save walkthrough completion.'))} /><Text style={{ color: muted, fontSize: 12 }}>Step {tour.index + 1} of {walkthroughSteps.length}</Text></View>
       <Text style={{ color: ink, fontSize: 20, fontWeight: '700' }}>{step.title}</Text>
       <Text style={{ color: ink, fontSize: 15, lineHeight: 20 }}>{step.body}</Text>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 3 }}>

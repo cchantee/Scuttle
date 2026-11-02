@@ -2,7 +2,7 @@ import { colors } from '../src/design/theme';
 import React, { useState } from 'react';
 import { Text } from '../src/design/Text';
 import { usePathname, useRouter } from 'expo-router';
-import { Action, DateField, Field, Feedback, Page, RecordLine } from '../src/components/ui';
+import { Action, DateField, Field, Disclosure, Feedback, Page, RecordLine } from '../src/components/ui';
 import { useCrud } from '../src/components/hooks';
 import { EmptyState, Eyebrow } from '../src/components/brand';
 import { TourHighlight } from '../src/components/walkthrough';
@@ -33,12 +33,11 @@ export default function Goals() {
     } catch (e) { reportError(e instanceof Error ? e.message : 'Enter valid amounts.'); }
   };
 
-  return <Page title={pathname === '/goal/new' ? 'Create a goal' : 'Something to look forward to.'}><Feedback /><TourHighlight id="goals-main"><Eyebrow>One step closer</Eyebrow><Text style={{ color: colors.muted }}>Make room for what matters. Goal allocations organize money; they do not automatically move cash.</Text>
+  return <Page title={pathname === '/goal/new' ? 'Create a goal' : 'Savings goals'}><Feedback /><TourHighlight id="goals-main"><Text style={{ color: colors.muted }}>Track the things you’re saving for. Setting money aside here does not automatically transfer it between accounts.</Text>
     {!formOpen ? <Action label="+ Create goal" variant="primary" fullWidth onPress={() => router.push('/goal/new')} /> : <>
       <Field label="Goal name" value={name} onChangeText={setName} />
-      <Field label="Target amount" value={target} onChangeText={setTarget} keyboardType="decimal-pad" />
-      <Field label="Current saved amount (optional)" value={initial} onChangeText={setInitial} keyboardType="decimal-pad" />
-      <DateField label="Target date" value={targetDate} onChangeText={setTargetDate} optional />
+      <Field label="Target amount ($)" value={target} onChangeText={setTarget} keyboardType="decimal-pad" />
+      <Disclosure title="Starting progress & target date" initiallyOpen={Boolean(crud.editingId)}><Field label="Already saved ($)" value={initial} onChangeText={setInitial} keyboardType="decimal-pad" hint="Starting goal progress only; this does not change your account balance." /><DateField label="Target date" value={targetDate} onChangeText={setTargetDate} optional /></Disclosure>
       <Action label="Save goal" variant="primary" fullWidth onPress={() => save()} />
       <Action label="Cancel" onPress={reset} />
     </>}
@@ -46,7 +45,7 @@ export default function Goals() {
     {data.goals.map(goal => {
       const summary = goalSummary(data, goal);
       const pending = pendingForGoal(data, goal.id);
-      return <RecordLine key={goal.id} title={goal.name} detail={`${formatMoney(summary.savedCents)} designated / ${formatMoney(goal.targetCents)} · ${formatMoney(summary.remainingCents)} to go${pending ? ` · ${formatMoney(pending)} pending` : ''}${goal.targetDate ? ` · Target ${formatDateInput(goal.targetDate)}` : ''}`} progress={{ value: summary.savedCents, max: goal.targetCents, label: `${summary.progressPercent.toFixed(0)}%` }} onView={() => router.push({ pathname: '/goal/[id]', params: { id: goal.id } })} onEdit={() => { setName(goal.name); setTarget((goal.targetCents / 100).toFixed(2)); setInitial((goal.initialSavedCents / 100).toFixed(2)); setTargetDate(goal.targetDate ? formatDateInput(goal.targetDate) : ''); crud.setEditingId(goal.id); setFormOpen(true); }} onDelete={() => crud.confirmDelete(goal.id)} />;
+      return <RecordLine key={goal.id} title={goal.name} detail={`${formatMoney(summary.savedCents)} designated / ${formatMoney(goal.targetCents)} · ${formatMoney(summary.remainingCents)} to go${pending ? ` · ${formatMoney(pending)} pending` : ''}${goal.targetDate ? ` · Target ${formatDateInput(goal.targetDate)}` : ''}`} progress={{ value: summary.savedCents, max: goal.targetCents, label: `${summary.progressPercent.toFixed(0)}% toward goal` }} onView={() => router.push({ pathname: '/goal/[id]', params: { id: goal.id } })} onEdit={() => { setName(goal.name); setTarget((goal.targetCents / 100).toFixed(2)); setInitial((goal.initialSavedCents / 100).toFixed(2)); setTargetDate(goal.targetDate ? formatDateInput(goal.targetDate) : ''); crud.setEditingId(goal.id); setFormOpen(true); }} onDelete={() => crud.confirmDelete(goal.id)} />;
     })}
   </TourHighlight></Page>;
 }

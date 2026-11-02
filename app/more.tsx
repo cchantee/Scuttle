@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { Link } from 'expo-router';
 import { Modal, Pressable, View } from 'react-native';
 import { Text } from '../src/design/Text';
-import { Action, Card, FeatureButton, Feedback, Page, LocalNotice } from '../src/components/ui';
+import { Action, Card, Disclosure, FeatureButton, Feedback, Page, LocalNotice } from '../src/components/ui';
 import { useData } from '../src/state/DataProvider';
 import { TourHighlight, useWalkthrough } from '../src/components/walkthrough';
 import { useRouter } from 'expo-router';
@@ -40,18 +40,17 @@ export default function More() {
     <FeatureButton title="Paychecks" detail="Plan future pay, confirm receipt, and adjust allocations." href="/paychecks" />
     <FeatureButton title="Profile" detail="Your name and account details." href="/profile" />
     <Action label="Replay app walkthrough" onPress={() => { walkthrough?.start(); router.replace('/'); }} />
-    <Card>
+    <Disclosure title="Explore with sample data"><Card>
       <Text style={{ fontWeight: '700', fontSize: 16 }}>Sample data</Text>
       <Text>{sampleDataExists ? 'Sample records have already been added to this profile.' : 'Add example paychecks, budgets, accounts, transactions, and savings goals so you can explore the app.'}</Text>
       {sampleDataNotice ? <Text>{sampleDataNotice}</Text> : null}
       {!sampleDataExists ? <Action label="Load sample data" onPress={() => setConfirmSampleData(true)} /> : null}
       {sampleDataExists ? <Action label="Delete all sample data" destructive onPress={() => setConfirmDeleteSampleData(true)} /> : null}
-    </Card>
+    </Card></Disclosure>
     <FeatureButton title="Budget categories" detail="Manage categories and paycheck allocations." href="/budget" />
-    <FeatureButton title="Transactions" detail="Search, record, edit, and review activity." href="/transactions" />
-    <FeatureButton title="Financial history" detail="Filter activity by date, paycheck, category, or account." href="/history" />
+    <FeatureButton title="Transactions & recurring bills" detail="Manage activity and scheduled reminders." href="/transactions" />
     {authConfigured && authUser ? <Action label="Sign out" onPress={() => { void signOut().catch(e => reportError(e instanceof Error ? e.message : 'Could not sign out.')); }} /> : null}
-    {!authConfigured ? <Link href="/sign-in">Account setup</Link> : null}
+    {!authConfigured ? <Text style={{ color: colors.muted, fontSize: 13 }}>This build stores records on this device. Cloud sign-in is not configured.</Text> : null}
   </TourHighlight>
   <Modal visible={confirmSampleData} transparent animationType="fade" onRequestClose={() => setConfirmSampleData(false)}>
     <Pressable onPress={() => setConfirmSampleData(false)} style={{ flex: 1, justifyContent: 'center', padding: 22, backgroundColor: 'rgba(0,0,0,0.32)' }}>

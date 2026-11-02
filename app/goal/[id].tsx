@@ -3,7 +3,7 @@ import React, { useRef, useState } from 'react';
 import { Link, useRouter } from 'expo-router';
 import { Text } from '../../src/design/Text';
 import { useLocalSearchParams } from 'expo-router';
-import { Action, Card, DateField, Feedback, Field, Page, ProgressBar, RecordLine, SectionTitle, SelectId } from '../../src/components/ui';
+import { Action, Card, DateField, Disclosure, Feedback, Field, Page, ProgressBar, RecordLine, SectionTitle, SelectId } from '../../src/components/ui';
 import { EmptyState, Mascot } from '../../src/components/brand';
 import { newId } from '../../src/domain/models';
 import { useCrud } from '../../src/components/hooks';
@@ -55,20 +55,20 @@ export default function GoalDetail() {
   };
   return <Page title={goal.name}><Feedback />
     <Card style={{ backgroundColor: colors.subtle }}>{summary.savedCents >= goal.targetCents ? <Mascot mood="celebrate" size={44} /> : null}<Text style={{ color: colors.muted, fontSize: 12 }}>Designated toward your goal · includes pending funds</Text><Text style={{ fontSize: 25, color: colors.text, fontWeight: '700' }}>{formatMoney(summary.savedCents)}</Text><Text style={{ color: colors.muted }}>of {formatMoney(goal.targetCents)} · {formatMoney(summary.remainingCents)} remaining</Text><ProgressBar value={summary.savedCents} max={goal.targetCents} /><Text style={{ color: colors.muted }}>{summary.progressPercent.toFixed(0)}% complete{goal.targetDate ? ` · Target ${formatDateDisplay(goal.targetDate)}` : ''}</Text>{pendingForGoal(data, goal.id) ? <Text style={{ color: colors.muted }}>{formatMoney(pendingForGoal(data, goal.id))} pending in selected accounts</Text> : null}</Card>
-    {!formOpen ? <Action label="+ Record contribution" variant="primary" fullWidth onPress={() => setFormOpen(true)} /> : <>
-      {crud.list.find(item => item.id === crud.editingId)?.status === 'posted' ? <Text>Posted amount: {formatMoney(parseMoney(amount) || 0)}</Text> : <Field label="Contribution amount" value={amount} onChangeText={setAmount} keyboardType="decimal-pad" />}
-      {!crud.editingId ? <SelectId label="Contribution source" choices={[{ id: 'account', title: 'Account' }, { id: 'budget', title: 'Paycheck budget group' }]} value={fundingMode} onChange={setFundingMode} /> : null}
+    {!formOpen ? <Action label="Set aside money" variant="primary" fullWidth onPress={() => setFormOpen(true)} /> : <>
+      {crud.list.find(item => item.id === crud.editingId)?.status === 'posted' ? <Text>Posted amount: {formatMoney(parseMoney(amount) || 0)}</Text> : <Field label="Contribution amount ($)" value={amount} onChangeText={setAmount} keyboardType="decimal-pad" />}
+      {!crud.editingId ? <SelectId label="Where is this money coming from?" choices={[{ id: 'account', title: 'Account' }, { id: 'budget', title: 'Paycheck category' }]} value={fundingMode} onChange={setFundingMode} /> : null}
       {!crud.editingId && fundingMode === 'budget' ? <>
-        <SelectId label="Fund from budget group" choices={budgetChoices} value={allocationId} onChange={setAllocationId} />
+        <SelectId label="Paycheck category" choices={budgetChoices} value={allocationId} onChange={setAllocationId} />
         {!budgetChoices.length ? <Text>No eligible budget groups have unspent funds. Add a paycheck category allocation first.</Text> : null}
         <Text style={{ color: colors.muted, fontSize: 12 }}>Reallocates unspent budget money to this goal without changing account balances or recording a transfer. Planned paycheck funds remain planned and are excluded from actual savings. The allocation is recorded with today's date.</Text>
       </> : <>
       <SelectId label="Fund from account" choices={data.accounts.filter(account => account.type !== 'credit_card').map(account => { const available = availableAccountBalance(data, account); return { id: account.id, title: `${account.name} · available ${formatMoney(available ?? 0)}` }; })} value={accountId} onChange={setAccountId} create="account" />
       <Text style={{ color: colors.muted, fontSize: 12 }}>This amount counts toward the goal now and is held as pending in the selected account until you record the expense or transfer.</Text>
       <DateField label="Contribution date" value={date} onChangeText={setDate} />
-      <Field label="Note (optional)" value={note} onChangeText={setNote} />
+      <Disclosure title="Add a note" initiallyOpen={Boolean(note)}><Field label="Note" value={note} onChangeText={setNote} /></Disclosure>
       </>}
-      <Action label={crud.editingId ? 'Save changes' : fundingMode === 'budget' ? 'Reallocate to goal' : 'Allocate pending funds'} variant="primary" fullWidth onPress={() => save()} />
+      <Action label={crud.editingId ? 'Save changes' : fundingMode === 'budget' ? 'Save category contribution' : 'Reserve from account'} variant="primary" fullWidth onPress={() => save()} />
       <Action label="Cancel" onPress={reset} />
     </>}
     <SectionTitle>Contributions</SectionTitle>
@@ -79,7 +79,7 @@ export default function GoalDetail() {
       const linkedTransaction = item.transactionId ? data.transactions.find(value => value.id === item.transactionId) : undefined;
       const detail = `${formatDateDisplay(item.date)} · ${item.status === 'pending' ? `Pending · ${account?.name ?? 'account'}` : item.status === 'designated' ? `Completed in ${account?.name ?? 'account'}` : item.transactionId ? `${linkedTransaction?.type === 'expense' ? 'Previously posted expense' : 'Transferred'}${linkedTransaction?.toAccountId ? ` to ${data.accounts.find(value => value.id === linkedTransaction.toAccountId)?.name ?? 'account'}` : ''}` : 'Recorded'}${item.note ? ` · ${item.note}` : ''}`;
       if (item.status !== 'pending') return <RecordLine key={item.id} title={formatMoney(item.amountCents)} detail={detail} onEdit={() => { setAmount((item.amountCents / 100).toFixed(2)); setDate(formatDateInput(item.date)); setNote(item.note ?? ''); setAccountId(item.accountId ?? ''); crud.setEditingId(item.id); setFormOpen(true); }} onDelete={() => crud.confirmDelete(item.id)} />;
-      return <Card key={item.id}><Text style={{ fontWeight: '700' }}>{formatMoney(item.amountCents)} · Pending</Text><Text>{detail}</Text><Action label="Complete in this account" onPress={() => completeGoalContributionInAccount(item.id)} /><Action label="Transfer to another account" onPress={() => router.push({ pathname: '/transaction/new', params: { goalContributionId: item.id } })} /><Action label="Edit" onPress={() => { setAmount((item.amountCents / 100).toFixed(2)); setDate(formatDateInput(item.date)); setNote(item.note ?? ''); setAccountId(item.accountId ?? ''); crud.setEditingId(item.id); setFormOpen(true); }} /><Action label="Cancel allocation" destructive onPress={() => crud.confirmDelete(item.id)} /></Card>;
+      return <Card key={item.id}><Text style={{ fontWeight: '700' }}>{formatMoney(item.amountCents)} · Pending</Text><Text>{detail}</Text><Action label="Keep in this account" onPress={() => completeGoalContributionInAccount(item.id)} /><Action label="Transfer to another account" onPress={() => router.push({ pathname: '/transaction/new', params: { goalContributionId: item.id } })} /><Action label="Edit" onPress={() => { setAmount((item.amountCents / 100).toFixed(2)); setDate(formatDateInput(item.date)); setNote(item.note ?? ''); setAccountId(item.accountId ?? ''); crud.setEditingId(item.id); setFormOpen(true); }} /><Action label="Cancel reservation" destructive onPress={() => crud.confirmDelete(item.id)} /></Card>;
     })}
   </Page>;
 }

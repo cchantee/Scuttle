@@ -88,7 +88,7 @@ export function upsertRecord<C extends CollectionName>(data: AppData, collection
         : undefined;
       const activeAllocation = updated.allocations
         .filter(item => item.categoryId === tx.categoryId && !updated.paychecks.find(paycheck => paycheck.id === item.paycheckId)?.budgetArchived && updated.paychecks.find(paycheck => paycheck.id === item.paycheckId)?.status !== 'planned')
-        .sort((a, b) => (updated.paychecks.find(p => p.id === b.paycheckId)?.receivedAt ?? '').localeCompare(updated.paychecks.find(p => p.id === a.paycheckId)?.receivedAt ?? ''))[0];
+        .sort((a, b) => (updated.paychecks.find(p => p.id === b.paycheckId)?.receivedAt ?? '').localeCompare(updated.paychecks.find(p => p.id === a.paycheckId)?.receivedAt ?? '') || updated.paychecks.findIndex(p => p.id === b.paycheckId) - updated.paychecks.findIndex(p => p.id === a.paycheckId))[0];
       const allocation = previousAllocation ?? activeAllocation;
       if (allocation) tx = { ...tx, allocationId: allocation.id };
     }

@@ -19,7 +19,7 @@ describe('activity presentation', () => {
     const original = JSON.stringify(d);
     const rows = activityRows(d);
     expect(rows.find(r => r.kind === 'paycheck')).toMatchObject({ sign: '', detail: 'Planned paycheck · not received' });
-    expect(rows.find(r => r.kind === 'contribution')).toMatchObject({ sign: '', paycheckId: 'p', detail: 'Planned goal allocation · not transferred' });
+    expect(rows.find(r => r.kind === 'contribution')).toMatchObject({ sign: '', paycheckId: 'p', detail: 'Planned goal allocation · Work · not transferred' });
     expect(rows.find(r => r.kind === 'transfer')).toMatchObject({ sign: '', detail: 'Transfer · Checking → Savings' });
     expect(JSON.stringify(d)).toBe(original);
   });
@@ -48,4 +48,13 @@ describe('activity presentation', () => {
     expect(activityRows(emptyData())).toEqual([]);
     expect(activityRows(fixture()).map(r => r.date)).toEqual(['2026-11-10', '2026-11-10', '2026-11-02', '2026-11-01']);
   });
+  it('keeps plans and allocation records out of Money activity while All records preserves every row', () => {
+    const d = fixture();
+    const plannedRows = activityRows(d);
+    expect(filterActivity(plannedRows, { ...filters, kind: 'money' }).map(r => r.kind)).toEqual(['transfer']);
+    expect(filterActivity(plannedRows, { ...filters, kind: 'all' })).toHaveLength(4);
+    d.paychecks[0].status = 'received';
+    expect(filterActivity(activityRows(d), { ...filters, kind: 'money' }).map(r => r.kind)).toEqual(['paycheck', 'transfer']);
+  });
+
 });

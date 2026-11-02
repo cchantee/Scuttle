@@ -3,7 +3,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { Text } from '../src/design/Text';
 import { useLocalSearchParams, usePathname, useRouter } from 'expo-router';
-import { Action, DateField, Field, Feedback, Page, RecordLine, SelectId } from '../src/components/ui';
+import { Action, DateField, Disclosure, Field, Feedback, Page, RecordLine, SelectId } from '../src/components/ui';
 import { useCrud } from '../src/components/hooks';
 import { EmptyState, Eyebrow } from '../src/components/brand';
 import { newId, SubscriptionFrequency, Transaction, TransactionType } from '../src/domain/models';
@@ -48,7 +48,7 @@ export default function Transactions() {
 
   useEffect(() => {
     if (loading || appliedParams.current === paramKey) return;
-    if (!params.editId && !params.goalContributionId && (params.type === 'income' || params.type === 'transfer' || params.type === 'expense')) setKind(params.type);
+    if (!params.editId && !params.goalContributionId && (params.type === 'income' || params.type === 'transfer' || params.type === 'expense' || params.type === 'subscription')) setKind(params.type);
     if (params.toAccountId && data.accounts.some(a => a.id === params.toAccountId)) setToAccount(params.toAccountId);
     const toEdit = data.transactions.find(item => item.id === params.editId);
     if (toEdit) { fill(toEdit); crud.setEditingId(toEdit.id); }
@@ -108,6 +108,7 @@ export default function Transactions() {
       if (ok) reset();
     } catch (e) { reportError(e instanceof Error ? e.message : 'Invalid transaction.'); }
   };
+  if (!loading && params.editId && !data.transactions.some(t => t.id === params.editId)) return <Page title="Transaction not found"><Text>This transaction no longer exists. Your other records are unchanged.</Text><Action label="Back to activity" onPress={() => router.replace('/history')} /></Page>;
   const filtered = [...data.transactions].sort((a, b) => b.date.localeCompare(a.date)).filter(tx => {
     const accountName = data.accounts.find(item => item.id === tx.accountId)?.name ?? '';
     const categoryName = data.categories.find(item => item.id === tx.categoryId)?.name ?? '';
@@ -115,17 +116,16 @@ export default function Transactions() {
     return !query || `${tx.description} ${tx.type} ${accountName} ${categoryName} ${tx.date}`.toLowerCase().includes(query);
   });
 
-  return <Page title={pathname === '/transaction/new' ? 'Add transaction' : 'Transactions'}><TourHighlight id="expense-main"><Feedback />
+  return <Page title={pathname === '/transaction/new' ? kind === 'expense' ? 'Log spending' : kind === 'income' ? 'Record income' : kind === 'transfer' ? 'Transfer money' : 'Recurring bill' : 'Transactions'}><TourHighlight id="expense-main"><Feedback />
     {!formOpen ? <>
       <Field label="Search transactions" value={search} onChangeText={setSearch} placeholder="Search description, category, account" />
       <Action label="+ Add transaction" variant="primary" fullWidth onPress={() => router.push('/transaction/new')} />
     </> : <>
       <Eyebrow>Keep the details in view</Eyebrow><Text style={{ color: colors.muted }}>{kind === 'transfer' ? 'Choose where money leaves and where it arrives. Transfers and credit card payments are not expenses.' : kind === 'income' ? 'Record money received. For a paycheck with budget allocations, use Add → Paycheck instead.' : kind === 'subscription' ? 'A subscription is a reminder. Log the actual charge as an expense when paid.' : 'Record a purchase and choose its account and budget category.'}</Text>
       {params.goalContributionId ? <View style={{ padding: 12, borderRadius: 10, backgroundColor: colors.subtle }}><Text>Transfer this reserved amount to another account. Scuttle records both sides, releases the pending hold, and keeps goal progress counted once.</Text></View> : null}
-      <Field label="Name / description" value={description} onChangeText={setDescription} placeholder="e.g. Groceries" />
-      <Text style={{ fontWeight: '600' }}>Transaction type</Text>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>{(params.goalContributionId ? ['transfer'] as TransactionType[] : kinds).map(value => <Pressable key={value} accessibilityRole="button" accessibilityState={{ selected: kind === value }} onPress={() => setKind(value)} style={{ paddingHorizontal: 14, paddingVertical: 9, borderWidth: 1, borderColor: kind === value ? colors.muted : colors.border, minHeight: 48, borderRadius: 14, backgroundColor: kind === value ? colors.evergreen : colors.surface }}><Text style={{ color: kind === value ? colors.onPrimary : colors.text, fontWeight: kind === value ? '700' : '400' }}>{value === 'expense' ? 'Expense' : value === 'income' ? 'Income' : value === 'transfer' ? 'Transfer' : 'Subscription'}</Text></Pressable>)}</View>
-      {params.goalContributionId ? <Text>Pending amount to post: {formatMoney(parseMoney(amount) || 0)}</Text> : <Field label="Amount" value={amount} onChangeText={setAmount} keyboardType="decimal-pad" placeholder="0.00" />}
+      {params.goalContributionId ? <Text>Pending amount to post: {formatMoney(parseMoney(amount) || 0)}</Text> : <Field label="Amount ($)" value={amount} onChangeText={setAmount} keyboardType="decimal-pad" placeholder="0.00" />}
+      <Field label="What was it for?" value={description} onChangeText={setDescription} placeholder={kind === 'transfer' ? 'e.g. Move to savings' : 'e.g. Groceries'} />
       {kind === 'subscription' ? <>
         <Text style={{ fontWeight: '600' }}>Repeat schedule</Text>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>{subscriptionFrequencies.map(value => <Pressable key={value} accessibilityRole="button" accessibilityState={{ selected: subscriptionFrequency === value }} onPress={() => setSubscriptionFrequency(value)} style={{ paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: subscriptionFrequency === value ? colors.muted : colors.border, minHeight: 48, borderRadius: 14, backgroundColor: subscriptionFrequency === value ? colors.evergreen : colors.surface }}><Text style={{ color: subscriptionFrequency === value ? colors.onPrimary : colors.text }}>{value === 'biweekly' ? 'Every 2 weeks' : value === 'annual' ? 'Yearly' : value === 'custom' ? 'Other' : value[0].toUpperCase() + value.slice(1)}</Text></Pressable>)}</View>
@@ -143,8 +143,8 @@ export default function Transactions() {
       </> : null}
       {params.goalContributionId ? <Text>Funding account: {data.accounts.find(item => item.id === accountId)?.name ?? 'Missing account'}</Text> : <SelectId label={kind === 'transfer' ? 'Source account' : kind === 'subscription' ? 'Account charged (optional)' : kind === 'income' ? 'Receiving account (optional)' : 'Account (optional)'} choices={data.accounts.map(item => ({ id: item.id, title: `${item.name}${item.type === 'credit_card' ? ' · credit card' : ''}`}))} value={accountId} onChange={value => { setAccount(value); if (toAccountId === value) setToAccount(''); }} create="account" />}
       {kind === 'transfer' ? <SelectId label="Destination account" choices={data.accounts.filter(item => item.id !== accountId).map(item => ({ id: item.id, title: item.name }))} value={toAccountId} onChange={setToAccount} create="account" /> : null}
-      <Field label="Notes (optional)" value={notes} onChangeText={setNotes} multiline />
-      <Action label={crud.editingId ? 'Save changes' : params.goalContributionId ? 'Post transfer and clear reservation' : kind === 'subscription' ? 'Save subscription' : 'Save transaction'} variant="primary" fullWidth onPress={() => submit()} />
+      <Disclosure title="Add a note" initiallyOpen={Boolean(notes)}><Field label="Note" value={notes} onChangeText={setNotes} multiline /></Disclosure>
+      <Action label={crud.editingId ? 'Save changes' : params.goalContributionId ? 'Post transfer and clear reservation' : kind === 'subscription' ? 'Save subscription' : kind === 'expense' ? 'Save spending' : kind === 'income' ? 'Save income' : 'Save transfer'} variant="primary" fullWidth onPress={() => submit()} />
       <Action label="Cancel" onPress={() => reset()} />
     </>}
     {!formOpen ? <>

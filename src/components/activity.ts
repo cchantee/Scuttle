@@ -19,7 +19,7 @@ export function activityRows(data: AppData): ActivityRow[] {
   }));
   for (const a of data.allocations) rows.push({
     id: `a-${a.id}`, recordId: a.id, date: data.paychecks.find(p => p.id === a.paycheckId)?.receivedAt || '',
-    title: data.categories.find(c => c.id === a.categoryId)?.name || 'Category', detail: 'Budget allocation · no account movement',
+    title: data.categories.find(c => c.id === a.categoryId)?.name || 'Category', detail: `Budget allocation · ${data.paychecks.find(p => p.id === a.paycheckId)?.source || 'Paycheck'} · no account movement`,
     amountCents: a.amountCents, kind: 'allocation', sign: '', categoryId: a.categoryId, paycheckId: a.paycheckId,
     collection: 'allocations', route: '/allocation/[id]', params: { id: a.id },
   });
@@ -33,7 +33,7 @@ export function activityRows(data: AppData): ActivityRow[] {
   });
   for (const c of data.contributions) rows.push({
     id: `c-${c.id}`, recordId: c.id, date: c.date, title: data.goals.find(g => g.id === c.goalId)?.name || 'Savings goal',
-    detail: c.paycheckId ? `${data.paychecks.find(p => p.id === c.paycheckId)?.status === 'planned' ? 'Planned' : 'Paycheck'} goal allocation · not transferred` : `${c.status === 'pending' ? 'Pending reservation' : c.status === 'posted' ? 'Posted contribution' : 'Goal designation'}${c.note ? ` · ${c.note}` : ''}`,
+    detail: c.paycheckId ? `${data.paychecks.find(p => p.id === c.paycheckId)?.status === 'planned' ? 'Planned' : 'Paycheck'} goal allocation · ${data.paychecks.find(p => p.id === c.paycheckId)?.source || 'Paycheck'} · not transferred` : `${c.status === 'pending' ? 'Pending reservation' : c.status === 'posted' ? 'Posted contribution' : 'Goal designation'}${c.note ? ` · ${c.note}` : ''}`,
     amountCents: c.amountCents, kind: 'contribution', sign: '', paycheckId: c.paycheckId, accountId: c.accountId,
     collection: 'contributions', route: '/goal/[id]', params: { id: c.goalId },
   });
@@ -45,5 +45,5 @@ export function filterActivity(rows: ActivityRow[], filters: ActivityFilters) {
   return rows.filter(row => (!query || `${row.title} ${row.detail} ${row.date}`.toLowerCase().includes(query)) &&
     (!filters.from || row.date >= filters.from) && (!filters.to || row.date <= filters.to) &&
     (!filters.categoryId || row.categoryId === filters.categoryId) && (!filters.paycheckId || row.paycheckId === filters.paycheckId) &&
-    (!filters.accountId || row.accountId === filters.accountId || row.toAccountId === filters.accountId) && (!filters.kind || row.kind === filters.kind));
+    (!filters.accountId || row.accountId === filters.accountId || row.toAccountId === filters.accountId) && (!filters.kind || filters.kind === 'all' || (filters.kind === 'money' ? ['income', 'expense', 'transfer'].includes(row.kind) || (row.kind === 'paycheck' && row.sign === '+') : row.kind === filters.kind)));
 }

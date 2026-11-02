@@ -2,7 +2,7 @@ import { colors } from '../src/design/theme';
 import React, { useEffect, useRef, useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Text } from '../src/design/Text';
-import { Action, Field, Feedback, Page, RecordLine } from '../src/components/ui';
+import { Action, Field, Disclosure, Feedback, Page, RecordLine, SelectId } from '../src/components/ui';
 import { useCrud } from '../src/components/hooks';
 import { EmptyState, Hero, Metric } from '../src/components/brand';
 import { TourHighlight } from '../src/components/walkthrough';
@@ -21,7 +21,7 @@ const types: { id: AccountType; label: string }[] = [
 export default function Accounts() {
   const crud = useCrud('accounts');
   const router = useRouter();
-  const { data, reportError } = useData();
+  const { data, loading, reportError } = useData();
   const params = useLocalSearchParams<{ accountId?: string }>();
   const initializedId = useRef('');
   const [formOpen, setFormOpen] = useState(false);
@@ -46,17 +46,17 @@ export default function Accounts() {
     } catch (e) { reportError(e instanceof Error ? e.message : 'Invalid amount.'); }
   };
 
+  if (!loading && params.accountId && !data.accounts.some(a => a.id === params.accountId)) return <Page title="Account not found"><Text>This account no longer exists.</Text><Action label="All accounts" onPress={() => router.replace('/accounts')} /></Page>;
   const summary = cashAccountSummary(data);
-  return <Page title="Your accounts."><Feedback /><TourHighlight id="accounts-main">
+  return <Page title="Accounts"><Feedback /><TourHighlight id="accounts-main">
     <Hero label="Actual cash balances" amount={formatMoney(summary.totalCashCents)} detail="Checking, savings, and cash · based on recorded activity" />
     <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}><Metric label="After pending goal holds" amount={formatMoney(summary.availableCashCents)} /><Metric label="Credit card debt owed" amount={formatMoney(summary.creditCardDebtCents)} caution detail="Debt is separate from your cash" /></View>
     {!formOpen ? <Action label="+ Add account" variant="primary" fullWidth onPress={() => setFormOpen(true)} /> : <>
       <Field label="Account name" value={name} onChangeText={setName} />
-      <TextLabel>Account type</TextLabel>
-      {types.map(t => <Action key={t.id} label={`${type === t.id ? '✓ ' : ''}${t.label}`} onPress={() => setType(t.id)} />)}
-      <Field label={type === 'credit_card' ? 'Starting amount owed' : 'Starting account balance'} value={balance} onChangeText={setBalance} keyboardType="decimal-pad" />
+      <SelectId label="Account type" choices={types.map(t => ({ id: t.id, title: t.label }))} value={type} onChange={value => { if (value) setType(value as AccountType); }} />
+      <Field label={type === 'credit_card' ? 'Starting amount owed ($)' : 'Starting account balance ($)'} value={balance} onChangeText={setBalance} keyboardType="decimal-pad" />
       {supportsInterest(type) ? <><Field label={type === 'credit_card' ? 'Interest rate (APR %, optional)' : 'Interest rate (APY %, optional)'} value={interestRate} onChangeText={setInterestRate} keyboardType="decimal-pad" placeholder="e.g. 4.25" /><TextLabel>Used for Scuttle’s interest estimate. Changes apply from today and preserve prior accrued or credited interest.</TextLabel></> : null}
-      <Field label="Notes (optional)" value={notes} onChangeText={setNotes} multiline />
+      <Disclosure title="Account note" initiallyOpen={Boolean(notes)}><Field label="Note" value={notes} onChangeText={setNotes} multiline /></Disclosure>
       <Action label={crud.editingId ? 'Save account' : 'Add account'} variant="primary" fullWidth onPress={() => submit()} />
       <Action label="Cancel" onPress={reset} />
     </>}
