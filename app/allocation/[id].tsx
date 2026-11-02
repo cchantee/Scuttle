@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useLocalSearchParams, useRouter } from 'expo-router';
-import { Text } from 'react-native';
+import { Text } from '../../src/design/Text';
 import { allocationSummary } from '../../src/domain/calculations';
 import { formatMoney } from '../../src/domain/money';
 import { Action, Feedback, Page, RecordLine } from '../../src/components/ui';

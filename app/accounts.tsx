@@ -1,10 +1,14 @@
+import { colors } from '../src/design/theme';
 import React, { useEffect, useRef, useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Text } from 'react-native';
+import { Text } from '../src/design/Text';
 import { Action, Field, Feedback, Page, RecordLine } from '../src/components/ui';
 import { useCrud } from '../src/components/hooks';
+import { EmptyState, Hero, Metric } from '../src/components/brand';
+import { TourHighlight } from '../src/components/walkthrough';
+import { View } from 'react-native';
 import { AccountType } from '../src/domain/models';
-import { accountBalance, availableAccountBalance, pendingForAccount } from '../src/domain/calculations';
+import { cashAccountSummary, accountBalance, availableAccountBalance, pendingForAccount } from '../src/domain/calculations';
 import { formatMoney, parseMoney } from '../src/domain/money';
 import { useData } from '../src/state/DataProvider';
 
@@ -42,7 +46,10 @@ export default function Accounts() {
     } catch (e) { reportError(e instanceof Error ? e.message : 'Invalid amount.'); }
   };
 
-  return <Page title="Accounts"><Feedback />
+  const summary = cashAccountSummary(data);
+  return <Page title="Your accounts."><Feedback /><TourHighlight id="accounts-main">
+    <Hero label="Actual cash balances" amount={formatMoney(summary.totalCashCents)} detail="Checking, savings, and cash · based on recorded activity" />
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}><Metric label="After pending goal holds" amount={formatMoney(summary.availableCashCents)} /><Metric label="Credit card debt owed" amount={formatMoney(summary.creditCardDebtCents)} caution detail="Debt is separate from your cash" /></View>
     {!formOpen ? <Action label="+ Add account" variant="primary" fullWidth onPress={() => setFormOpen(true)} /> : <>
       <Field label="Account name" value={name} onChangeText={setName} />
       <TextLabel>Account type</TextLabel>
@@ -50,17 +57,17 @@ export default function Accounts() {
       <Field label={type === 'credit_card' ? 'Starting amount owed' : 'Starting account balance'} value={balance} onChangeText={setBalance} keyboardType="decimal-pad" />
       {supportsInterest(type) ? <><Field label={type === 'credit_card' ? 'Interest rate (APR %, optional)' : 'Interest rate (APY %, optional)'} value={interestRate} onChangeText={setInterestRate} keyboardType="decimal-pad" placeholder="e.g. 4.25" /><TextLabel>Used for Scuttle’s interest estimate. Changes apply from today and preserve prior accrued or credited interest.</TextLabel></> : null}
       <Field label="Notes (optional)" value={notes} onChangeText={setNotes} multiline />
-      <Action label={crud.editingId ? 'Save account' : 'Add account'} variant="primary" fullWidth onPress={() => void submit()} />
+      <Action label={crud.editingId ? 'Save account' : 'Add account'} variant="primary" fullWidth onPress={() => submit()} />
       <Action label="Cancel" onPress={reset} />
     </>}
-    {!data.accounts.length ? <TextLabel>No accounts yet. Add a virtual account to track manually entered activity.</TextLabel> : null}
+    {!data.accounts.length ? <EmptyState title="A place for your money." detail="Add a checking, savings, cash, or credit card account. Balances update from the activity you record." /> : null}
     {data.accounts.map(a => {
       const pending = pendingForAccount(data, a.id);
       const available = availableAccountBalance(data, a);
-      return <RecordLine key={a.id} title={a.name} detail={`${a.type === 'credit_card' ? 'Outstanding balance' : 'Account balance'}: ${formatMoney(accountBalance(data, a))}${pending ? ` · ${formatMoney(pending)} pending` : ''}${available !== null ? ` · ${formatMoney(available)} available` : ''}${supportsInterest(a.type) ? ` · ${a.type === 'credit_card' ? 'APR' : 'APY'} ${a.interestRatePercent ?? 0}%` : ''}`} onView={() => router.push({ pathname: '/account/[id]', params: { id: a.id } })} onEdit={() => { setName(a.name); setType(a.type); setBalance((a.initialBalanceCents / 100).toFixed(2)); setInterestRate(a.interestRatePercent?.toString() ?? ''); setNotes(a.notes ?? ''); crud.setEditingId(a.id); setFormOpen(true); }} onDelete={() => crud.confirmDelete(a.id)} />;
+      return <RecordLine key={a.id} title={a.name} detail={`${a.type === 'credit_card' ? 'Credit card debt owed' : 'Account balance'}: ${formatMoney(accountBalance(data, a))}${pending ? ` · ${formatMoney(pending)} pending` : ''}${available !== null ? ` · ${formatMoney(available)} available` : ''}${supportsInterest(a.type) ? ` · ${a.type === 'credit_card' ? 'APR' : 'APY'} ${a.interestRatePercent ?? 0}%` : ''}`} onView={() => router.push({ pathname: '/account/[id]', params: { id: a.id } })} onEdit={() => { setName(a.name); setType(a.type); setBalance((a.initialBalanceCents / 100).toFixed(2)); setInterestRate(a.interestRatePercent?.toString() ?? ''); setNotes(a.notes ?? ''); crud.setEditingId(a.id); setFormOpen(true); }} onDelete={() => crud.confirmDelete(a.id)} />;
     })}
-  </Page>;
+  </TourHighlight></Page>;
 }
 
-function TextLabel({ children }: React.PropsWithChildren) { return <Text style={{ color: '#000' }}>{children}</Text>; }
+function TextLabel({ children }: React.PropsWithChildren) { return <Text style={{ color: colors.text }}>{children}</Text>; }
 function supportsInterest(type: AccountType) { return type === 'savings' || type === 'high_yield_savings' || type === 'credit_card'; }

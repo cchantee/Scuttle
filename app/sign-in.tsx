@@ -1,5 +1,7 @@
+import { colors } from '../src/design/theme';
 import React, { useEffect, useState } from 'react';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
+import { Text } from '../src/design/Text';
 import { Redirect, usePathname, useRouter } from 'expo-router';
 import { Action, Feedback, Field, Page } from '../src/components/ui';
 import { cloudConfigurationHelp } from '../src/backend/supabase';
@@ -48,7 +50,7 @@ export default function SignIn() {
   };
 
   return <Page title={registering ? 'Create account' : 'Sign in'} showTabs={false}><Feedback />
-    <Text>Make every paycheck count.</Text>
+    <Text style={{ color: colors.muted, fontSize: 17 }}>A little clarity, every payday.</Text>
     {authLoading ? <Text>Checking sign-in…</Text> : null}
     {!authConfigured ? <View style={{ gap: 8 }}>
       <Text>Cloud sign-in and cross-device sync need backend setup. Scuttle currently runs in local device mode.</Text>
@@ -59,7 +61,7 @@ export default function SignIn() {
       <Field label="Email" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
       <Field label="Password" value={password} onChangeText={setPassword} secureTextEntry autoCapitalize="none" />
       {registering ? <Field label="Confirm password" value={confirmPassword} onChangeText={setConfirmPassword} secureTextEntry autoCapitalize="none" /> : null}
-      <Action label={busy ? 'Please wait…' : registering ? 'Create account' : 'Sign in'} variant="primary" fullWidth onPress={() => { if (!busy) void submit(); }} />
+      <Action label={busy ? 'Please wait…' : registering ? 'Create account' : 'Sign in'} variant="primary" fullWidth disabled={busy} onPress={() => submit()} />
       <Action label={registering ? 'Already have an account? Sign in' : 'New to Scuttle? Create an account'} onPress={() => router.push(registering ? '/sign-in' : '/sign-up')} />
       {confirmationPending ? <Action label="Continue to sign in" onPress={() => router.replace('/sign-in')} /> : null}
       {message ? <Text accessibilityRole="alert">{message}</Text> : null}

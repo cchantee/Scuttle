@@ -1,3 +1,6 @@
+import { SaveFeedbackProvider } from '../src/components/saveFeedback';
+import { StatusBar } from 'expo-status-bar';
+import { colors } from '../src/design/theme';
 import { Stack } from 'expo-router';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { DataProvider } from '../src/state/DataProvider';
@@ -8,7 +11,7 @@ export const unstable_settings = { anchor: 'welcome' };
 
 function Routes() {
   const { authConfigured, authUser } = useData();
-  return <WalkthroughProvider><Stack screenOptions={{ headerShown: false }}>
+  return <SaveFeedbackProvider><WalkthroughProvider><StatusBar style="dark" /><Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.paper } }}>
     <Stack.Screen name="welcome" />
     <Stack.Screen name="sign-in" options={{ title: 'Account' }} />
     <Stack.Screen name="sign-up" options={{ title: 'Create account' }} />
@@ -29,7 +32,7 @@ function Routes() {
       <Stack.Screen name="goal/new" options={{ title: 'Create goal' }} />
       <Stack.Screen name="transaction/new" options={{ title: 'Add transaction' }} />
     </Stack.Protected>
-  </Stack></WalkthroughProvider>;
+  </Stack></WalkthroughProvider></SaveFeedbackProvider>;
 }
 
 export default function RootLayout() {

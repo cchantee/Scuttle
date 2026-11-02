@@ -1,9 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
+import { Text } from '../src/design/Text';
 import { Action, DateField, Field, Feedback, Page, RecordLine, SelectId } from '../src/components/ui';
 import { useCrud } from '../src/components/hooks';
 import { formatMoney, parseMoney } from '../src/domain/money';
+import { EmptyState, Eyebrow } from '../src/components/brand';
 import { Paycheck } from '../src/domain/models';
 import { allocatedForPaycheck, unallocatedForPaycheck } from '../src/domain/calculations';
 import { useData } from '../src/state/DataProvider';
@@ -53,7 +55,7 @@ export default function Paychecks() {
       reset();
     } catch (e) { reportError(e instanceof Error ? e.message : 'Invalid paycheck.'); }
   };
-  return <Page title="Paychecks"><TourHighlight id="paychecks-main"><Feedback />
+  return <Page title="Paychecks"><TourHighlight id="paychecks-main"><Feedback /><Eyebrow>Make each payday manageable</Eyebrow><Text>Plan ahead or record income you’ve received. Assigning money never deposits it again.</Text>
     {!formOpen ? <Action label="+ Add paycheck" variant="primary" fullWidth onPress={() => setFormOpen(true)} /> : <>
       <Field label={fundingMode === 'planned' ? "Expected amount" : "Amount received"} value={amount} onChangeText={setAmount} keyboardType="decimal-pad" placeholder="0.00" />
       <DateField label={fundingMode === 'planned' ? "Expected payment date" : "Date received"} value={date} onChangeText={setDate} />
@@ -70,10 +72,10 @@ export default function Paychecks() {
         {crud.editingId ? <Text>Only unspent funds move. This paycheck’s allocations and linked expenses stay in its history.</Text> : null}
       </> : null}
       <Field label="Notes (optional)" value={notes} onChangeText={setNotes} multiline />
-      <Action label="Save paycheck" variant="primary" fullWidth onPress={() => void submit()} />
+      <Action label="Save paycheck" variant="primary" fullWidth onPress={() => submit()} />
       <Action label="Cancel" onPress={reset} />
     </>}
-    {!data.paychecks.length ? <Text>Paychecks you add will appear here.</Text> : null}
+    {!data.paychecks.length ? <EmptyState title="Every paycheck gets a plan." detail="Add expected pay now, or record a paycheck that has arrived. Your allocations stay editable." /> : null}
     {([...data.paychecks] as Paycheck[]).sort((a, b) => b.receivedAt.localeCompare(a.receivedAt)).map(p => {
       const depositName = data.accounts.find(account => account.id === p.accountId)?.name;
       const currentFundsName = data.accounts.find(account => account.id === (p.remainingAccountId ?? p.accountId))?.name;

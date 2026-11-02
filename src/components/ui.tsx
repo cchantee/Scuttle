@@ -1,22 +1,26 @@
 import React from 'react';
-import { Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
-import { Link, usePathname } from 'expo-router';
-import { useRouter } from 'expo-router';
+import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, TextInput, View } from 'react-native';
+import { Link, usePathname, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useData } from '../state/DataProvider';
 import { normalizeDateInput, todayDateInput } from '../domain/date';
 import { AccountType, newId } from '../domain/models';
 import { parseMoney } from '../domain/money';
 import { TourHighlight, walkthroughSteps, WalkthroughOverlay, useWalkthrough } from './walkthrough';
+import { Text } from '../design/Text';
+import { colors } from '../design/theme';
+import { useSavedFeedback } from './saveFeedback';
+import { Eyebrow, Wordmark } from './brand';
 
-const ink = '#161616';
-const muted = '#666';
-const line = '#dedede';
-const surface = '#fff';
-const canvas = '#f7f7f7';
+const ink = colors.text;
+const muted = colors.muted;
+const line = colors.border;
+const surface = colors.surface;
+const canvas = colors.paper;
 const tabs = [
-  { label: 'Home', mark: '⌂', href: '/' }, { label: 'Accounts', mark: '▤', href: '/accounts' },
-  { label: 'Add', mark: '＋', href: '/transaction/new' }, { label: 'Budget', mark: '＄', href: '/budget' }, { label: 'Goals', mark: '◎', href: '/goals' },
+  { label: 'Home', mark: '⌂', href: '/' }, { label: 'Budget', mark: '▦', href: '/budget' },
+  { label: 'Add', mark: '+', href: '/transaction/new' }, { label: 'Activity', mark: '⇄', href: '/history' },
+  { label: 'More', mark: '☰', href: '/more' },
 ] as const;
 
 function BottomNavigation() {
@@ -26,71 +30,75 @@ function BottomNavigation() {
   const [addMenuOpen, setAddMenuOpen] = React.useState(false);
   const walkthrough = useWalkthrough();
   const tourAddMenuOpen = Boolean(pathname === '/' && walkthrough?.active && walkthroughSteps[walkthrough.index]?.target === 'nav-add');
-  React.useEffect(() => {
-    if (tourAddMenuOpen) setAddMenuOpen(true);
-    else if (walkthrough?.active) setAddMenuOpen(false);
-  }, [tourAddMenuOpen, walkthrough?.active]);
+  React.useEffect(() => { if (tourAddMenuOpen) setAddMenuOpen(true); else if (walkthrough?.active) setAddMenuOpen(false); }, [tourAddMenuOpen, walkthrough?.active]);
   const addMenuVisible = addMenuOpen || tourAddMenuOpen;
-  const chooseAddAction = (action: 'expense' | 'paycheck' | 'budget') => {
+  const choose = (type: 'expense' | 'income' | 'transfer' | 'paycheck') => {
     setAddMenuOpen(false);
-    if (action === 'expense') router.push('/transaction/new');
-    if (action === 'paycheck') router.push({ pathname: '/paychecks', params: { add: '1' } });
-    if (action === 'budget') router.push({ pathname: '/budget', params: { add: '1' } });
+    if (type === 'paycheck') router.push({ pathname: '/paychecks', params: { add: '1' } });
+    else router.push({ pathname: '/transaction/new', params: { type } });
   };
-  return <View accessibilityRole="tablist" style={{ flexDirection: 'row', justifyContent: 'space-around', borderTopWidth: 1, borderColor: line, paddingTop: 7, paddingBottom: Math.max(insets.bottom, 6), backgroundColor: surface }}>
-    {tabs.map(tab => {
-      const active = tab.href === '/' ? pathname === '/' : pathname.startsWith(tab.href);
-      const add = tab.href === '/transaction/new';
-      if (add) return <TourHighlight key={tab.href} id="nav-add"><Pressable accessibilityRole="button" accessibilityLabel="Add" accessibilityState={{ expanded: addMenuVisible }} onPress={() => setAddMenuOpen(!addMenuOpen)} style={{ alignItems: 'center', justifyContent: 'center', minWidth: 58, paddingHorizontal: 5, paddingVertical: 2 }}>
-        <Text style={{ width: 34, height: 34, textAlign: 'center', textAlignVertical: 'center', borderRadius: 18, overflow: 'hidden', color: '#fff', backgroundColor: ink, fontSize: 25, lineHeight: 34 }}>＋</Text>
-      </Pressable></TourHighlight>;
-      return <TourHighlight key={tab.href} id={`nav-${tab.label.toLowerCase()}`}><Link href={tab.href} replace asChild><Pressable accessibilityRole="tab" accessibilityState={{ selected: active }} style={{ alignItems: 'center', justifyContent: 'center', minWidth: 58, paddingHorizontal: 5, paddingVertical: 2 }}>
-        <Text style={{ color: ink, fontSize: 19, lineHeight: 22, fontWeight: active ? '700' : '400' }}>{tab.mark}</Text>
-        <Text style={{ color: active ? ink : muted, fontSize: 10, fontWeight: active ? '700' : '400' }}>{tab.label}</Text>
-      </Pressable></Link></TourHighlight>;
-    })}
-    {addMenuVisible ? <View style={{ position: 'absolute', bottom: 55, alignSelf: 'center', width: 242, padding: 8, gap: 4, borderWidth: 1, borderColor: line, borderRadius: 12, backgroundColor: surface, zIndex: 20, elevation: 7, shadowColor: '#000', shadowOpacity: 0.16, shadowRadius: 9, shadowOffset: { width: 0, height: 3 } }}>
-      <AddMenuItem label="Log expense" onPress={() => chooseAddAction('expense')} />
-      <AddMenuItem label="Log paycheck" onPress={() => chooseAddAction('paycheck')} />
-      <AddMenuItem label="Budget funds" onPress={() => chooseAddAction('budget')} />
-    </View> : null}
+  return <View style={{ borderTopWidth: 1, borderColor: line, backgroundColor: surface, paddingBottom: Math.max(insets.bottom, 10) }}>
+    <View accessibilityRole="tablist" style={{ width: '100%', maxWidth: 680, alignSelf: 'center', flexDirection: 'row', paddingTop: 9 }}>
+      {tabs.map(tab => {
+        const more = ['/accounts', '/account/', '/goals', '/goal/', '/profile', '/more'];
+        const active = tab.href === '/' ? pathname === '/' : tab.label === 'Budget' ? ['/budget', '/paycheck', '/allocation'].some(p => pathname.startsWith(p)) : tab.label === 'Activity' ? ['/history', '/transactions'].includes(pathname) : tab.label === 'More' ? more.some(p => pathname.startsWith(p)) : false;
+        return <View key={tab.label} style={{ flex: 1 }}><TourHighlight id={`nav-${tab.label.toLowerCase()}`}><Pressable accessibilityRole={tab.label === 'Add' ? 'button' : 'tab'} accessibilityLabel={tab.label} aria-selected={tab.label === 'Add' ? undefined : active} accessibilityState={tab.label === 'Add' ? { expanded: addMenuVisible } : { selected: active }} onPress={() => tab.label === 'Add' ? setAddMenuOpen(!addMenuOpen) : router.replace(tab.href)} style={({ pressed }) => ({ minHeight: 54, alignItems: 'center', justifyContent: 'center', gap: 2, borderRadius: 16, backgroundColor: pressed ? colors.pressed : 'transparent' })}>
+          <View style={{ minWidth: 40, minHeight: 30, borderRadius: 13, alignItems: 'center', justifyContent: 'center', backgroundColor: tab.label === 'Add' ? colors.evergreen : active ? colors.subtle : 'transparent' }}><Text style={{ color: tab.label === 'Add' ? colors.lime : active ? colors.teal : muted, fontSize: 24, lineHeight: 30, fontWeight: '600' }}>{tab.mark}</Text></View>
+          <Text style={{ fontSize: 11, lineHeight: 17, color: active ? colors.teal : muted, fontWeight: active ? '800' : '500' }}>{tab.label}</Text>
+        </Pressable></TourHighlight></View>;
+      })}
+    </View>
+    <Modal visible={addMenuVisible} transparent animationType="slide" onRequestClose={() => setAddMenuOpen(false)}>
+      <Pressable accessibilityLabel="Dismiss add menu" onPress={() => setAddMenuOpen(false)} style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: colors.scrim }}>
+        <Pressable accessibilityViewIsModal onPress={e => e.stopPropagation()} style={{ maxHeight: '90%', padding: 24, paddingBottom: Math.max(insets.bottom, 24), gap: 10, borderTopLeftRadius: 28, borderTopRightRadius: 28, width: '100%', maxWidth: 680, alignSelf: 'center', backgroundColor: canvas }}>
+          <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: 10 }}><Eyebrow>Make your next move</Eyebrow><Text style={{ fontSize: 27, lineHeight: 35, fontWeight: '800' }}>What would you like to add?</Text>
+          {([{ type: 'expense', mark: '↗', title: 'Expense', detail: 'Record a purchase' }, { type: 'income', mark: '↙', title: 'Income', detail: 'Record other money received' }, { type: 'transfer', mark: '⇄', title: 'Transfer', detail: 'Move money or pay a credit card' }, { type: 'paycheck', mark: '▣', title: 'Paycheck', detail: 'Plan or record your next pay' }] as const).map(item => <Pressable key={item.type} accessibilityRole="button" accessibilityLabel={`Add ${item.title}`} onPress={() => choose(item.type)} style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 14, padding: 15, minHeight: 64, borderRadius: 17, backgroundColor: pressed ? colors.pressed : surface })}><Text style={{ color: colors.teal, fontSize: 25 }}>{item.mark}</Text><View style={{ flex: 1 }}><Text style={{ fontWeight: '700' }}>{item.title}</Text><Text style={{ color: muted, fontSize: 13 }}>{item.detail}</Text></View><Text>›</Text></Pressable>)}
+          <Action label="Cancel" fullWidth onPress={() => setAddMenuOpen(false)} /></ScrollView>
+        </Pressable>
+      </Pressable>
+    </Modal>
   </View>;
-}
-
-function AddMenuItem({ label, onPress }: { label: string; onPress: () => void }) {
-  return <Pressable accessibilityRole="button" onPress={event => { event.stopPropagation(); onPress(); }} style={({ pressed }) => ({ minHeight: 42, justifyContent: 'center', paddingHorizontal: 11, borderRadius: 8, backgroundColor: pressed ? '#ededed' : surface })}><Text style={{ color: ink, fontWeight: '600' }}>{label}</Text></Pressable>;
 }
 
 export const Page = ({ title, children, showTabs = true, headerRight }: React.PropsWithChildren<{ title: string; showTabs?: boolean; headerRight?: React.ReactNode }>) => {
   const pathname = usePathname();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const showBack = pathname !== '/' && pathname !== '/welcome';
+  const { loading, authLoading } = useData();
+  const saved = useSavedFeedback();
+  const showBack = !['/', '/welcome', '/budget', '/history', '/more'].includes(pathname);
   const backHref = pathname.startsWith('/account/') ? '/accounts' : pathname.startsWith('/allocation/') ? '/budget' : pathname.startsWith('/paycheck/') ? '/paychecks' : pathname.startsWith('/goal/') ? '/goals' : pathname.startsWith('/transaction/') ? '/transactions' : pathname === '/sign-in' || pathname === '/sign-up' ? '/welcome' : '/';
-  const goBack = () => router.canGoBack() ? router.back() : router.replace(backHref);
-  return <View style={{ flex: 1, backgroundColor: canvas }}>
-    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 16, paddingTop: insets.top + 14, paddingBottom: 22, gap: 12 }} keyboardShouldPersistTaps="handled" automaticallyAdjustKeyboardInsets>
-      {showBack ? <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 9, marginBottom: 1 }}><View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, gap: 9 }}><Pressable accessibilityRole="button" accessibilityLabel="Go back" onPress={goBack} hitSlop={8} style={{ paddingVertical: 4, paddingRight: 7 }}><Text style={{ color: ink, fontSize: 25, lineHeight: 29 }}>‹</Text></Pressable><Text style={{ fontSize: 21, fontWeight: '700', color: ink, flexShrink: 1 }}>{title}</Text></View>{headerRight}</View> : <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 1 }}><Text style={{ fontSize: 23, fontWeight: '700', color: ink, flexShrink: 1 }}>{title}</Text>{headerRight}</View>}{children}
-    </ScrollView>{showTabs ? <BottomNavigation /> : null}<WalkthroughOverlay />
-  </View>;
+  return <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, backgroundColor: canvas }}>
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ width: '100%', maxWidth: 720, alignSelf: 'center', paddingHorizontal: 22, paddingTop: insets.top + 18, paddingBottom: 32, gap: 16 }} keyboardShouldPersistTaps="handled" keyboardDismissMode="on-drag" automaticallyAdjustKeyboardInsets>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 4 }}>
+        <View style={{ flex: 1, gap: 8 }}>{showBack ? <Pressable accessibilityRole="button" accessibilityLabel="Go back" onPress={() => router.canGoBack() ? router.back() : router.replace(backHref)} style={{ minHeight: 44, justifyContent: 'center', alignSelf: 'flex-start' }}><Text style={{ color: colors.teal, fontWeight: '700' }}>‹  Back</Text></Pressable> : <Wordmark />}
+          {pathname !== '/welcome' ? <Text accessibilityRole="header" style={{ fontSize: 29, lineHeight: 37, fontWeight: '800', letterSpacing: -1 }}>{title}</Text> : null}</View>{headerRight}
+      </View>
+      {loading || authLoading ? <View accessibilityLiveRegion="polite" style={{ flexDirection: 'row', alignItems: 'center', gap: 10, padding: 16, backgroundColor: colors.subtle, borderRadius: 16 }}><ActivityIndicator color={colors.teal} /><Text>Loading your records…</Text></View> : null}
+      {children}
+    </ScrollView>
+    {saved ? <View accessibilityLiveRegion="polite" style={{ padding: 12, backgroundColor: colors.lime }}><Text style={{ textAlign: 'center', fontWeight: '700' }}>✓ Changes saved{showTabs ? '' : ' successfully'}</Text></View> : null}
+    {showTabs ? <BottomNavigation /> : null}<WalkthroughOverlay />
+  </KeyboardAvoidingView>;
 };
 
-export const SectionTitle = ({ children, right }: React.PropsWithChildren<{ right?: React.ReactNode }>) => <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 3 }}><Text style={{ fontSize: 17, fontWeight: '700', color: ink }}>{children}</Text>{right}</View>;
+export const SectionTitle = ({ children, right }: React.PropsWithChildren<{ right?: React.ReactNode }>) => <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap', marginTop: 12 }}><Text style={{ fontSize: 19, fontWeight: '800', color: ink, flexShrink: 1 }}>{children}</Text>{right}</View>;
 
-export const Card = ({ children, style }: React.PropsWithChildren<{ style?: object }>) => <View style={[{ borderWidth: 1, borderColor: '#e2e2e2', borderRadius: 13, padding: 13, gap: 8, backgroundColor: surface }, style]}>{children}</View>;
+export const Card = ({ children, style }: React.PropsWithChildren<{ style?: object }>) => <View style={[{ borderWidth: 1, borderColor: line, borderRadius: 22, padding: 18, gap: 10, backgroundColor: surface }, style]}>{children}</View>;
 
 export const ProgressBar = ({ value, max }: { value: number; max: number }) => {
   const progress = max > 0 ? Math.max(0, Math.min(1, value / max)) : 0;
-  return <View accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: 100, now: Math.round(progress * 100) }} style={{ height: 8, borderRadius: 8, overflow: 'hidden', backgroundColor: '#e3e3e3' }}><View style={{ width: `${progress * 100}%`, height: '100%', backgroundColor: '#858585', borderRadius: 8 }} /></View>;
+  return <View accessibilityLabel={value > max ? "Over assigned amount" : "Progress"} accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: 100, now: Math.round(progress * 100) }} style={{ height: 8, borderRadius: 8, overflow: 'hidden', backgroundColor: colors.border }}><View style={{ width: `${progress * 100}%`, height: '100%', backgroundColor: value > max ? colors.danger : colors.teal, borderRadius: 8 }} /></View>;
 };
 
 export const Field = ({ label, value, onChangeText, placeholder, keyboardType = 'default', multiline = false, secureTextEntry = false, autoCapitalize = 'sentences' }: { label: string; value: string; onChangeText: (v: string) => void; placeholder?: string; keyboardType?: 'default' | 'numeric' | 'decimal-pad' | 'email-address'; multiline?: boolean; secureTextEntry?: boolean; autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters' }) => {
   const [showPassword, setShowPassword] = React.useState(false);
+  const [focused, setFocused] = React.useState(false);
   return <View style={{ gap: 5 }}>
-    <Text style={{ color: ink, fontSize: 13 }}>{label}</Text>
-    <View style={{ flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: line, borderRadius: 9, paddingRight: secureTextEntry ? 6 : 0, backgroundColor: surface }}>
-      <TextInput accessibilityLabel={label} value={value} onChangeText={onChangeText} placeholder={placeholder} keyboardType={keyboardType} multiline={multiline} secureTextEntry={secureTextEntry && !showPassword} autoCapitalize={autoCapitalize} placeholderTextColor="#888" selectionColor={ink} onBlur={() => setShowPassword(false)} style={{ flex: 1, color: ink, paddingHorizontal: 12, paddingVertical: 9, minHeight: multiline ? 76 : 42 }} />
-      {secureTextEntry ? <Pressable accessibilityRole="button" accessibilityLabel="Hold to show password" accessibilityHint="Password is hidden again when you release" onPressIn={() => setShowPassword(true)} onPressOut={() => setShowPassword(false)} style={{ minWidth: 40, minHeight: 40, alignItems: 'center', justifyContent: 'center' }}><View style={{ width: 21, height: 14, borderWidth: 1.6, borderColor: ink, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }}><View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: ink }} /></View></Pressable> : null}
+    <Text style={{ color: ink, fontSize: 13, fontWeight: '700' }}>{label}</Text>
+    <View style={{ flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: focused ? colors.focus : line, borderRadius: 14, paddingRight: secureTextEntry ? 6 : 0, backgroundColor: surface }}>
+      <TextInput accessibilityLabel={label} value={value} onChangeText={onChangeText} placeholder={placeholder} keyboardType={keyboardType} multiline={multiline} secureTextEntry={secureTextEntry && !showPassword} autoCapitalize={autoCapitalize} placeholderTextColor={muted} selectionColor={colors.teal} onFocus={() => setFocused(true)} onBlur={() => { setShowPassword(false); setFocused(false); }} style={{ flex: 1, color: ink, fontSize: 16, paddingHorizontal: 14, paddingVertical: 12, minHeight: multiline ? 96 : 50 }} />
+      {secureTextEntry ? <Pressable accessibilityRole="button" accessibilityLabel="Hold to show password" accessibilityHint="Password is hidden again when you release" onPressIn={() => setShowPassword(true)} onPressOut={() => setShowPassword(false)} style={{ minWidth: 44, minHeight: 48, alignItems: 'center', justifyContent: 'center' }}><View style={{ width: 21, height: 14, borderWidth: 1.6, borderColor: ink, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }}><View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: ink }} /></View></Pressable> : null}
     </View>
   </View>;
 };
@@ -123,24 +131,24 @@ export const DateField = ({ label, value, onChangeText, optional = false }: { la
     setOpen(false);
   };
   return <View style={{ gap: 5 }}>
-    <Text style={{ color: ink, fontSize: 13 }}>{label}{optional ? ' (optional)' : ''}</Text>
+    <Text style={{ color: ink, fontSize: 13, fontWeight: '700' }}>{label}{optional ? ' (optional)' : ''}</Text>
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-      <TextInput accessibilityLabel={label} value={value} onChangeText={onChangeText} placeholder="M/D/YYYY" keyboardType="numbers-and-punctuation" placeholderTextColor="#888" selectionColor={ink} style={{ flex: 1, color: ink, borderWidth: 1, borderColor: line, borderRadius: 9, paddingHorizontal: 12, paddingVertical: 9, minHeight: 42, backgroundColor: surface }} />
-      <Pressable accessibilityRole="button" accessibilityLabel="Choose date from calendar" onPress={openCalendar} style={({ pressed }) => ({ width: 44, height: 42, alignItems: 'center', justifyContent: 'center', borderRadius: 9, borderWidth: 1, borderColor: line, backgroundColor: pressed ? '#ededed' : surface })}><Text style={{ fontSize: 19, color: ink }}>▦</Text></Pressable>
+      <TextInput accessibilityLabel={label} value={value} onChangeText={onChangeText} placeholder="M/D/YYYY" keyboardType="numbers-and-punctuation" placeholderTextColor={muted} selectionColor={colors.teal} style={{ flex: 1, color: ink, borderWidth: 1, borderColor: line, borderRadius: 14, paddingHorizontal: 12, paddingVertical: 12, minHeight: 48, backgroundColor: surface }} />
+      <Pressable accessibilityRole="button" accessibilityLabel="Choose date from calendar" onPress={openCalendar} style={({ pressed }) => ({ width: 44, minHeight: 48, alignItems: 'center', justifyContent: 'center', borderRadius: 14, borderWidth: 1, borderColor: line, backgroundColor: pressed ? colors.pressed : surface })}><Text style={{ fontSize: 19, color: ink }}>▦</Text></Pressable>
     </View>
     <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
-      <Pressable onPress={() => setOpen(false)} style={{ flex: 1, justifyContent: 'center', padding: 22, backgroundColor: 'rgba(0,0,0,0.32)' }}>
+      <Pressable onPress={() => setOpen(false)} style={{ flex: 1, justifyContent: 'center', padding: 22, backgroundColor: colors.scrim }}>
         <Pressable onPress={event => event.stopPropagation()} style={{ alignSelf: 'flex-end', width: '100%', maxWidth: 370, padding: 16, borderRadius: 14, borderWidth: 1, borderColor: line, backgroundColor: surface, gap: 13 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-            <Pressable accessibilityLabel="Previous month" onPress={() => changeMonth(-1)} hitSlop={8} style={{ padding: 6 }}><Text style={{ fontSize: 22, color: ink }}>‹</Text></Pressable>
-            <Text style={{ fontSize: 17, fontWeight: '700', color: ink }}>{visibleMonth.toLocaleString(undefined, { month: 'long', year: 'numeric' })}</Text>
-            <Pressable accessibilityLabel="Next month" onPress={() => changeMonth(1)} hitSlop={8} style={{ padding: 6 }}><Text style={{ fontSize: 22, color: ink }}>›</Text></Pressable>
+            <Pressable accessibilityRole="button" style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }} accessibilityLabel="Previous month" onPress={() => changeMonth(-1)} hitSlop={8}><Text style={{ fontSize: 22, color: ink }}>‹</Text></Pressable>
+            <Text style={{ fontSize: 19, fontWeight: '800', color: ink }}>{visibleMonth.toLocaleString(undefined, { month: 'long', year: 'numeric' })}</Text>
+            <Pressable accessibilityRole="button" style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }} accessibilityLabel="Next month" onPress={() => changeMonth(1)} hitSlop={8}><Text style={{ fontSize: 22, color: ink }}>›</Text></Pressable>
           </View>
           <View style={{ flexDirection: 'row' }}>{['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, index) => <Text key={`${day}-${index}`} style={{ width: `${100 / 7}%`, textAlign: 'center', color: muted, fontWeight: '600' }}>{day}</Text>)}</View>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>{cells.map((day, index) => {
             const iso = day ? `${year}-${(month + 1).toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}` : '';
             const active = Boolean(day && iso === selected);
-            return <View key={index} style={{ width: `${100 / 7}%`, alignItems: 'center', paddingVertical: 2 }}>{day ? <Pressable accessibilityRole="button" accessibilityState={{ selected: active }} onPress={() => chooseDay(day)} style={({ pressed }) => ({ width: 36, height: 36, alignItems: 'center', justifyContent: 'center', borderRadius: 18, backgroundColor: active ? '#858585' : pressed ? '#eee' : 'transparent' })}><Text style={{ color: active ? '#fff' : ink, fontWeight: active ? '700' : '400' }}>{day}</Text></Pressable> : <View style={{ width: 36, height: 36 }} />}</View>;
+            return <View key={index} style={{ width: `${100 / 7}%`, alignItems: 'center', paddingVertical: 2 }}>{day ? <Pressable accessibilityRole="button" accessibilityState={{ selected: active }} onPress={() => chooseDay(day)} style={({ pressed }) => ({ width: 40, minHeight: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 18, backgroundColor: active ? colors.teal : pressed ? colors.pressed : 'transparent' })}><Text style={{ color: active ? colors.onPrimary : ink, fontWeight: active ? '700' : '400' }}>{day}</Text></Pressable> : <View style={{ width: 40, minHeight: 44 }} />}</View>;
           })}</View>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
             <Pressable onPress={() => { onChangeText(todayDateInput()); setOpen(false); }}><Text style={{ color: ink, fontWeight: '600' }}>Today</Text></Pressable>
@@ -152,16 +160,28 @@ export const DateField = ({ label, value, onChangeText, optional = false }: { la
   </View>;
 };
 
-export const Action = ({ label, onPress, destructive = false, variant = 'secondary', fullWidth = false }: { label: string; onPress: () => void; destructive?: boolean; variant?: 'primary' | 'secondary' | 'text'; fullWidth?: boolean }) => <Pressable onPress={onPress} accessibilityRole="button" style={({ pressed }) => ({ borderWidth: variant === 'text' ? 0 : 1, borderColor: variant === 'primary' ? '#858585' : line, borderRadius: 9, minHeight: 40, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 13, paddingVertical: 9, alignSelf: fullWidth ? 'stretch' : 'flex-start', backgroundColor: variant === 'primary' ? (pressed ? '#707070' : '#898989') : pressed ? '#ededed' : surface })}><Text style={{ color: variant === 'primary' ? '#fff' : destructive ? '#444' : ink, fontWeight: variant === 'primary' ? '700' : '500', textDecorationLine: destructive ? 'underline' : 'none' }}>{label}</Text></Pressable>;
+export const Action = ({ label, onPress, destructive = false, variant = 'secondary', fullWidth = false, disabled = false, accessibilityLabel }: { accessibilityLabel?: string; label: string; onPress: () => unknown; destructive?: boolean; variant?: 'primary' | 'secondary' | 'text'; fullWidth?: boolean; disabled?: boolean }) => {
+  const [busy, setBusy] = React.useState(false);
+  const busyRef = React.useRef(false);
+  const { reportError } = useData();
+  const act = async () => {
+    if (busyRef.current || disabled) return;
+    busyRef.current = true;
+    try { const result = onPress(); if (result && typeof (result as Promise<unknown>).then === 'function') { setBusy(true); await result; } }
+    catch (error) { reportError(error instanceof Error ? error.message : 'Could not complete this action. Try again.'); }
+    finally { busyRef.current = false; setBusy(false); }
+  };
+  return <Pressable onPress={() => void act()} disabled={busy || disabled} accessibilityRole="button" accessibilityLabel={accessibilityLabel ?? label} aria-disabled={busy || disabled} aria-busy={busy} accessibilityState={{ disabled: busy || disabled, busy }} style={({ pressed }) => ({ borderWidth: variant === 'text' ? 0 : 1, borderColor: destructive ? colors.danger : variant === 'primary' ? colors.teal : line, borderRadius: 14, minHeight: 48, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, alignSelf: fullWidth ? 'stretch' : 'flex-start', opacity: disabled ? 0.5 : 1, backgroundColor: destructive ? colors.dangerSurface : variant === 'primary' ? (pressed ? colors.evergreen : colors.teal) : variant === 'text' ? 'transparent' : pressed ? colors.pressed : colors.subtle })}><Text style={{ color: destructive ? colors.danger : variant === 'primary' ? colors.onPrimary : variant === 'text' ? colors.teal : ink, fontWeight: '700', textAlign: 'center' }}>{busy ? 'Saving…' : label}</Text></Pressable>;
+};
 
 function supportsAccountInterest(type: AccountType) { return type === 'savings' || type === 'high_yield_savings' || type === 'credit_card'; }
 
-type FeatureRoute = '/paychecks' | '/budget' | '/transactions' | '/accounts' | '/goals' | '/history';
-export const FeatureButton = ({ title, detail, href }: { title: string; detail: string; href: FeatureRoute }) => <Link href={href} asChild><Pressable accessibilityRole="button" style={({ pressed }) => ({ borderWidth: 1, borderColor: line, borderRadius: 12, padding: 13, gap: 5, backgroundColor: pressed ? '#f0f0f0' : surface })}><Text style={{ color: ink, fontWeight: '700', fontSize: 15 }}>{title}</Text><Text style={{ color: muted, fontSize: 13 }}>{detail}</Text></Pressable></Link>;
+type FeatureRoute = '/profile' | '/more' | '/paychecks' | '/budget' | '/transactions' | '/accounts' | '/goals' | '/history';
+export const FeatureButton = ({ title, detail, href }: { title: string; detail: string; href: FeatureRoute }) => <Link href={href} asChild><Pressable accessibilityRole="button" style={({ pressed }) => ({ borderWidth: 1, borderColor: line, borderRadius: 18, padding: 18, gap: 5, backgroundColor: pressed ? colors.pressed : surface })}><Text style={{ color: ink, fontWeight: '700', fontSize: 15 }}>{title}</Text><Text style={{ color: muted, fontSize: 13 }}>{detail}</Text></Pressable></Link>;
 
 export const RecordLine = ({ title, detail, onEdit, onDelete, onView, viewLabel = 'View details  ›', progress }: { title: string; detail: string; onEdit: () => void; onDelete: () => void; onView?: () => void; viewLabel?: string; progress?: { value: number; max: number; label?: string } }) => <Card>
   <Text style={{ color: ink, fontWeight: '700', fontSize: 15 }}>{title}</Text>{progress ? <><ProgressBar value={progress.value} max={progress.max} /><Text style={{ color: muted, fontSize: 12 }}>{progress.label ?? `${progress.max ? Math.round(progress.value / progress.max * 100) : 0}%`}</Text></> : null}<Text style={{ color: muted, lineHeight: 19 }}>{detail}</Text>
-  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 7, marginTop: 2 }}>{onView ? <Action label={viewLabel} onPress={onView} /> : null}<Action label="Edit" onPress={onEdit} /><Action label="Delete" destructive onPress={onDelete} /></View>
+  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 7, marginTop: 2 }}>{onView ? <Action label={viewLabel} onPress={onView} /> : null}<Action label="Edit" variant="text" onPress={onEdit} /><Action label="Delete" variant="text" destructive onPress={onDelete} /></View>
 </Card>;
 
 export const SelectId = ({ label, choices, value, onChange, create }: { label: string; choices: { id: string; title: string }[]; value: string; onChange: (id: string) => void; create?: 'category' | 'account' }) => {
@@ -196,14 +216,14 @@ export const SelectId = ({ label, choices, value, onChange, create }: { label: s
     { id: 'high_yield_savings', title: 'High-yield savings' }, { id: 'cash', title: 'Cash' },
     { id: 'credit_card', title: 'Credit card' },
   ];
-  return <View style={{ gap: 5 }}><Text style={{ color: ink, fontSize: 13 }}>{label}</Text>
-    <Action label={`${selected?.title ?? 'Choose…'}   ⌄`} onPress={() => setOpen(!open)} />
-    {open ? <View style={{ borderWidth: 1, borderColor: line, borderRadius: 9, overflow: 'hidden', backgroundColor: surface }}>
-      {choices.map(choice => <Pressable key={choice.id} onPress={() => { onChange(value === choice.id ? '' : choice.id); setOpen(false); }} style={{ padding: 11, borderBottomWidth: 1, borderBottomColor: line, backgroundColor: value === choice.id ? '#f0f0f0' : surface }}><Text style={{ color: ink }}>{value === choice.id ? '✓  ' : ''}{choice.title}{value === choice.id ? '  ·  tap to clear' : ''}</Text></Pressable>)}
-      {create ? <Pressable accessibilityRole="button" onPress={startCreate} style={({ pressed }) => ({ padding: 11, backgroundColor: pressed ? '#ededed' : surface })}><Text style={{ color: ink, fontWeight: '600' }}>＋ Create new {create}</Text></Pressable> : choices.length === 0 ? <Text style={{ color: muted, padding: 11 }}>No records available. Create one first.</Text> : null}
+  return <View style={{ gap: 5 }}><Text style={{ color: ink, fontSize: 13, fontWeight: '700' }}>{label}</Text>
+    <Action fullWidth accessibilityLabel={`${label}: ${selected?.title ?? 'Choose'}`} label={`${selected?.title ?? 'Choose…'}   ⌄`} onPress={() => setOpen(!open)} />
+    {open ? <View style={{ borderWidth: 1, borderColor: line, borderRadius: 14, overflow: 'hidden', backgroundColor: surface }}>
+      {choices.map(choice => <Pressable key={choice.id} accessibilityRole="button" accessibilityState={{ selected: value === choice.id }} onPress={() => { onChange(value === choice.id ? '' : choice.id); setOpen(false); }} style={{ padding: 14, minHeight: 48, borderBottomWidth: 1, borderBottomColor: line, backgroundColor: value === choice.id ? colors.subtle : surface }}><Text style={{ color: ink }}>{value === choice.id ? '✓  ' : ''}{choice.title}{value === choice.id ? '  ·  tap to clear' : ''}</Text></Pressable>)}
+      {create ? <Pressable accessibilityRole="button" onPress={startCreate} style={({ pressed }) => ({ padding: 14, minHeight: 48, backgroundColor: pressed ? colors.pressed : surface })}><Text style={{ color: ink, fontWeight: '600' }}>＋ Create new {create}</Text></Pressable> : choices.length === 0 ? <Text style={{ color: muted, padding: 14, minHeight: 48 }}>No records available. Create one first.</Text> : null}
     </View> : null}
     {create ? <Modal visible={createOpen} transparent animationType="fade" onRequestClose={() => setCreateOpen(false)}>
-      <Pressable onPress={() => setCreateOpen(false)} style={{ flex: 1, justifyContent: 'center', padding: 20, backgroundColor: 'rgba(0,0,0,0.32)' }}>
+      <Pressable onPress={() => setCreateOpen(false)} style={{ flex: 1, justifyContent: 'center', padding: 20, backgroundColor: colors.scrim }}>
         <Pressable onPress={event => event.stopPropagation()} style={{ width: '100%', maxWidth: 400, maxHeight: '85%', alignSelf: 'center', padding: 16, borderRadius: 14, borderWidth: 1, borderColor: line, backgroundColor: surface, gap: 10 }}>
           <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: 10 }}>
             <Text style={{ fontSize: 18, fontWeight: '700', color: ink }}>Create {create}</Text>
@@ -225,12 +245,13 @@ export const SelectId = ({ label, choices, value, onChange, create }: { label: s
   </View>;
 };
 
-export const Feedback = () => { const { error, clearError } = useData(); return <Modal visible={Boolean(error)} transparent animationType="fade" onRequestClose={clearError}>
-  <View style={{ flex: 1, justifyContent: 'center', padding: 22, backgroundColor: 'rgba(0,0,0,0.38)' }}>
-    <View accessibilityRole="alert" style={{ width: '100%', maxWidth: 420, alignSelf: 'center', padding: 18, gap: 12, borderWidth: 1, borderColor: '#d2d2d2', borderRadius: 12, backgroundColor: surface }}>
-      <Text style={{ color: ink, fontSize: 18, fontWeight: '700' }}>Something needs attention</Text>
-      <Text style={{ color: ink, lineHeight: 21 }}>{error}</Text>
-      <Action label="Got it" variant="primary" fullWidth onPress={clearError} />
+export const Feedback = () => { const { error, clearError } = useData(); const connectionError = /network|fetch|offline|connection/i.test(error ?? ''); return <Modal visible={Boolean(error)} transparent animationType="fade" onRequestClose={clearError}>
+  <View style={{ flex: 1, justifyContent: 'center', padding: 22, backgroundColor: colors.scrim }}>
+    <View accessibilityRole="alert" style={{ width: '100%', maxWidth: 420, alignSelf: 'center', padding: 18, gap: 12, borderWidth: 1, borderColor: colors.border, borderRadius: 12, backgroundColor: surface }}>
+      <Text style={{ color: ink, fontSize: 18, fontWeight: '700' }}>{connectionError ? 'Couldn’t reach cloud storage' : 'Let’s check that'}</Text>
+      <Text style={{ color: colors.danger, lineHeight: 23 }}>{error}</Text>
+      {connectionError ? <Text style={{ color: muted }}>Your change was not confirmed as saved. Check your connection, then return to the form and retry. Scuttle does not queue offline cloud changes.</Text> : null}
+      <Action label="Return and try again" variant="primary" fullWidth onPress={clearError} />
     </View>
   </View>
 </Modal>; };

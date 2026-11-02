@@ -62,11 +62,17 @@ Other scripts: `npm test`, `npm run typecheck`, and `npm run qa:backend` (runs b
 
 - Cloud account and synchronization features require a Supabase project and the setup above. Without it, local device mode is used.
 - Local-only mode stores financial data in AsyncStorage without app-level encryption. Cloud mode stores it in an owner-scoped Supabase row.
-- There is no account-linked savings transfer workflow; the current contribution ledger is intentionally independent.
-- The UI is a functional black-and-white wireframe. iOS and Android JavaScript bundles were built, but a native app was not installed or usability-tested on a physical device in this environment.
+- Goal contributions can reserve account funds, be completed in place, or settle via an explicitly recorded transfer. Budget-group allocations designate funds without moving account money.
+- The `AI_Designed_App` branch implements Scuttle Brand v1.1 across the working application. iOS/Android/web JavaScript bundles export successfully; physical-device and native binary verification remain manual. See [AI-only design decisions and verification](docs/ai-only-design-decisions.md).
 - Date entry accepts `M/D/YYYY` with one or two digits for month/day and includes an in-app calendar picker; saved dates stay normalized as `YYYY-MM-DD`.
-- There is no demo-data loader or reset control yet. The required financial scenario is covered by automated unit tests and can also be entered through the screens.
+- Sample data can be loaded and removed from More. Removal preserves dependency checks.
 
 ## Current verification status
 
 SDK 58 dependency validation and TypeScript checking pass. Expo exported web, iOS, and Android JavaScript bundles. Start with `npx expo start --clear` and open the QR code in SDK 58 Expo Go. Cloud registration and syncing require the Supabase setup above.
+
+## Scuttle Brand v1.1
+
+On `AI_Designed_App`, the branded interface uses **Home · Budget · Add · Activity · More**. Add opens Expense, Income, Transfer, or Paycheck entry; More keeps Accounts, Savings Goals, Paychecks, Profile, sample data, and existing tools reachable. Planned/received paychecks and category-to-goal contributions remain fully functional.
+
+The package is extracted under `assets/Scuttle_Brand_v1_1/`. Design decisions, ten-screen route mapping, browser scenarios, verification results, and known limits are in [docs/ai-only-design-decisions.md](docs/ai-only-design-decisions.md). Financial operations, storage, backend configuration, and migrations are unchanged by the brand update.

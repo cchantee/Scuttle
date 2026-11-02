@@ -1,23 +1,25 @@
 import React from 'react';
-import { Text, View } from 'react-native';
-import { Link, Redirect } from 'expo-router';
-import { Action, Card, Feedback, Page } from '../src/components/ui';
+import { View } from 'react-native';
+import { Text } from '../src/design/Text';
+import { colors } from '../src/design/theme';
+import { Redirect, useRouter } from 'expo-router';
+import { Action, Feedback, Page } from '../src/components/ui';
+import { Eyebrow, Mascot } from '../src/components/brand';
 import { useData } from '../src/state/DataProvider';
 
 export default function Welcome() {
   const { authConfigured, authLoading, authUser } = useData();
-  if (authConfigured && authLoading) return <Page title="Scuttle" showTabs={false}><Text>Loading…</Text></Page>;
+  const router = useRouter();
+  if (authConfigured && authLoading) return <Page title="Scuttle" showTabs={false} />;
   if (authConfigured && authUser) return <Redirect href="/" />;
   return <Page title="Scuttle" showTabs={false}><Feedback />
-    <View style={{ flex: 1, justifyContent: 'center', gap: 14, minHeight: 440 }}>
-      <Text style={{ fontSize: 17, color: '#555' }}>Make every paycheck count.</Text>
-      <Card>
-        <Text style={{ color: '#171717', fontSize: 18, fontWeight: '700' }}>Welcome to Scuttle</Text>
-        <Text style={{ color: '#555' }}>Plan your paychecks, track account activity, and keep your goals in view.</Text>
-        <Link href="/sign-in" asChild><Action label="Sign in" variant="primary" fullWidth onPress={() => {}} /></Link>
-        <Link href="/sign-up" asChild><Action label="Create an account" fullWidth onPress={() => {}} /></Link>
-      </Card>
-      {!authConfigured ? <Card><Text style={{ color: '#555' }}>Cloud sign-in is not configured on this build. You can continue with local device data.</Text><Link href="/" asChild><Action label="Continue in local mode" onPress={() => {}} /></Link></Card> : null}
+    <View style={{ backgroundColor: colors.evergreen, borderRadius: 28, padding: 26, gap: 24 }}>
+      <Eyebrow light>Your money. Your pace.</Eyebrow>
+      <Text style={{ fontSize: 43, lineHeight: 49, fontWeight: '800', letterSpacing: -1.8, color: colors.paper }}>Make every paycheck <Text style={{ fontSize: 43, lineHeight: 49, fontWeight: '800', color: colors.lime }}>go further.</Text></Text>
+      <Text style={{ color: colors.mutedOnDark, fontSize: 16, lineHeight: 26 }}>Give your money a plan, keep spending in sight, and build toward what matters.</Text>
+      <View style={{ backgroundColor: colors.lime, borderRadius: 22, padding: 22, gap: 12 }}><Mascot size={80} mood="ready" /><Text style={{ fontSize: 24, lineHeight: 31, fontWeight: '800' }}>A little clarity, every payday.</Text><Text>Money moves. You’ve got this.</Text></View>
+      <Text style={{ color: colors.mutedOnDark }}>Plan it. Assign it. Make your next move.</Text>
     </View>
+    {authConfigured ? <><Action label="Get started" variant="primary" fullWidth onPress={() => router.push('/sign-up')} /><Action label="Already have an account? Sign in" fullWidth onPress={() => router.push('/sign-in')} /><Text style={{ color: colors.muted, textAlign: 'center', fontSize: 13 }}>This build saves records to your signed-in cloud account.</Text></> : <><Action label="Get started on this device" variant="primary" fullWidth onPress={() => router.replace('/')} /><Text style={{ color: colors.muted, fontSize: 13 }}>No sign-in needed. Records stay on this device; cloud sync is not configured.</Text></>}
   </Page>;
 }

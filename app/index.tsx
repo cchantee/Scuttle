@@ -1,6 +1,9 @@
+import { EmptyState, Eyebrow, Hero, Metric } from '../src/components/brand';
+import { colors } from '../src/design/theme';
 import React, { useEffect, useMemo, useState } from 'react';
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
+import { Text } from '../src/design/Text';
 import { activeBudgetAllocations, allocatedForPaycheck, allocationSummary, cashAccountSummary, nextSubscriptionDue, savingsGoalSummary, unallocatedForPaycheck } from '../src/domain/calculations';
 import { formatMoney } from '../src/domain/money';
 import { Action, Card, DateField, Field, Feedback, Page, ProgressBar, SectionTitle } from '../src/components/ui';
@@ -9,8 +12,8 @@ import { PaydayFrequency } from '../src/domain/models';
 import { calculateNextPayday, formatDateDisplay, formatDateInput, normalizeDateInput, todayISODate, todayDateInput } from '../src/domain/date';
 import { TourHighlight, useWalkthrough } from '../src/components/walkthrough';
 
-const ink = '#171717';
-const muted = '#626262';
+const ink = colors.text;
+const muted = colors.muted;
 export default function Dashboard() {
   const { data, loading, error, authConfigured, authLoading, authUser, saveNextPayday, planSubscription, reportError } = useData();
   const walkthrough = useWalkthrough();
@@ -64,7 +67,9 @@ export default function Dashboard() {
   const planPaycheck = [...data.paychecks].filter(item => !item.budgetArchived).sort((a, b) => b.receivedAt.localeCompare(a.receivedAt))[0];
   const rawName = authUser?.displayName || (authConfigured ? '' : data.user.displayName);
   const firstName = rawName.trim().split(/\s+/)[0];
-  const greetingName = firstName && firstName.toLowerCase() !== 'local' ? firstName : 'User';
+  const greetingName = firstName && firstName.toLowerCase() !== 'local' ? firstName : '';
+  const categoryRemaining = allocations.reduce((sum, allocation) => sum + allocationSummary(data, allocation).remainingCents, 0);
+  const categorySpent = allocations.reduce((sum, allocation) => sum + allocationSummary(data, allocation).spentCents, 0);
   const nextPayday = data.user.nextPayday;
   const upcomingPayday = nextPayday && data.user.paydayFrequency
     ? calculateNextPayday(nextPayday, todayISODate(), data.user.paydayFrequency, data.user.paydayIntervalDays)
@@ -85,11 +90,11 @@ export default function Dashboard() {
     <HeaderIcon label="Settings" mark="⚙" onPress={() => router.push('/more')} />
   </View>;
 
-  return <Page title={`Good morning, ${greetingName}!`} headerRight={headerRight}>
+  return <Page title={greetingName ? `Hey, ${greetingName}.` : 'Your money, at a glance.'} headerRight={headerRight}>
     <Feedback />
     {error ? <Text accessibilityRole="alert">{error}</Text> : null}
     <Field label="Search for anything" value={search} onChangeText={setSearch} placeholder="Search transactions, paychecks, accounts, goals" />
-    {query ? <ScrollView nestedScrollEnabled keyboardShouldPersistTaps="handled" style={{ maxHeight: 320, borderWidth: 1, borderColor: '#d8d8d8', borderRadius: 10, backgroundColor: '#fff' }} contentContainerStyle={{ padding: 8, gap: 5 }}>
+    {query ? <ScrollView nestedScrollEnabled keyboardShouldPersistTaps="handled" style={{ maxHeight: 320, borderWidth: 1, borderColor: colors.border, borderRadius: 10, backgroundColor: colors.surface }} contentContainerStyle={{ padding: 8, gap: 5 }}>
       {searchResults.map((item, index) => <Action key={`${item.label}-${index}`} label={`${item.label} · ${item.detail}`} onPress={item.open} />)}
       {paycheckGroups.map(group => <View key={group.name} style={{ gap: 3 }}>
         <Text style={{ paddingHorizontal: 8, paddingTop: 6, color: ink, fontWeight: '700' }}>{group.name}</Text>
@@ -98,37 +103,21 @@ export default function Dashboard() {
       {!searchResults.length && !paycheckGroups.length ? <Text style={{ padding: 8, color: muted }}>No matching records.</Text> : null}
     </ScrollView> : null}
 
-    <TourHighlight id="home-quick-views"><SectionTitle>Quick Views</SectionTitle>
-    <View style={{ flexDirection: 'row', gap: 8 }}>
-      <QuickView label="Paychecks" selected={quickView === 'paycheck'} onPress={() => setQuickView('paycheck')} />
-      <QuickView label="Accounts" selected={quickView === 'accounts'} onPress={() => setQuickView('accounts')} />
-      <QuickView label="Savings" selected={quickView === 'savings'} onPress={() => setQuickView('savings')} />
-    </View></TourHighlight>
-
-    {quickView === 'paycheck' ? <View style={{ flexDirection: 'row', gap: 8 }}>
-      <Card style={{ flex: 1, height: 72, padding: 7, gap: 2 }}>
-        <Text style={{ color: muted, fontSize: 11 }}>Available to Spend</Text>
-        <Text numberOfLines={1} adjustsFontSizeToFit style={{ fontSize: 18, color: ink, fontWeight: '700' }}>{formatMoney(unallocated)}</Text>
-        <Text style={{ color: muted, fontSize: 10 }}>from this paycheck</Text>
-      </Card>
-      <Pressable onPress={() => recent && router.push({ pathname: '/paycheck/[id]', params: { id: recent.id } })} style={{ flex: 1 }}>
-        <Card style={{ height: 72, padding: 7, gap: 2 }}>
-          <Text style={{ color: muted, fontSize: 10 }}>This Paycheck</Text>
-          <Text numberOfLines={1} adjustsFontSizeToFit style={{ fontSize: 16, color: ink, fontWeight: '700' }}>{recent ? formatMoney(recent.amountCents) : '—'}</Text>
-          <ProgressBar value={allocated} max={recent?.amountCents ?? 0} />
-          <Text style={{ color: muted, fontSize: 9 }}>{recent ? `${recent.amountCents ? Math.round(allocated / recent.amountCents * 100) : 0}% allocated` : 'Add a paycheck to begin'}</Text>
-        </Card>
-      </Pressable>
-    </View> : quickView === 'accounts' ? <>
-      <View style={{ flexDirection: 'row', gap: 8 }}>
-        <QuickMetric title="Total Cash Balance" amount={formatMoney(accountSummary.totalCashCents)} detail="Checking, savings, and cash" />
-        <QuickMetric title="Available Balance" amount={formatMoney(accountSummary.availableCashCents)} detail={`${formatMoney(accountSummary.totalCashCents - accountSummary.availableCashCents)} reserved`} />
-      </View>
-      {accountSummary.creditCardDebtCents > 0 ? <Text style={{ color: muted, fontSize: 12 }}>Credit card outstanding balance: {formatMoney(accountSummary.creditCardDebtCents)}</Text> : null}
-    </> : <View style={{ flexDirection: 'row', gap: 8 }}>
-      <QuickMetric title="Total Goal Savings" amount={formatMoney(savingsSummary.savedCents)} detail="Saved toward your goals" />
-      <QuickMetric title="Savings Progress" amount={`${savingsSummary.progressPercent.toFixed(1)}%`} detail={`${formatMoney(savingsSummary.savedCents)} of ${formatMoney(savingsSummary.targetCents)} targeted`} />
-    </View>}
+    <Eyebrow>{new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}</Eyebrow>
+    {recent ? <>
+      <Hero label={unallocated < 0 ? 'Over assigned' : 'Left to assign'} amount={formatMoney(Math.abs(unallocated))} detail={`${recent.source || 'Paycheck'} · ${formatDateDisplay(recent.receivedAt)} · ${formatMoney(recent.amountCents)} received`}>
+        <Text style={{ color: colors.mutedOnDark }}>Unassigned paycheck money is separate from your bank balance.</Text>
+        <Action label="Open paycheck plan →" fullWidth onPress={() => router.push({ pathname: '/paycheck/[id]', params: { id: recent.id } })} />
+      </Hero>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}><Metric label="Assigned from this pay" amount={formatMoney(allocated)} /><Metric label="Category budget remaining" amount={formatMoney(categoryRemaining)} caution={categoryRemaining < 0} detail={`${formatMoney(categorySpent)} spent across active budgets`} /></View>
+    </> : <EmptyState title="Start with your next paycheck." detail="A regular payday or a little extra work—give that money a plan before you spend it."><Action label="Add your first paycheck" variant="primary" fullWidth onPress={() => router.push({ pathname: '/paychecks', params: { add: '1' } })} /></EmptyState>}
+    <TourHighlight id="home-quick-views"><SectionTitle>A closer look</SectionTitle>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}><QuickView label="Paychecks" selected={quickView === 'paycheck'} onPress={() => setQuickView('paycheck')} /><QuickView label="Accounts" selected={quickView === 'accounts'} onPress={() => setQuickView('accounts')} /><QuickView label="Savings" selected={quickView === 'savings'} onPress={() => setQuickView('savings')} /></View>
+    </TourHighlight>
+    {quickView === 'paycheck' ? <Card><Text style={{ fontWeight: '700' }}>Your paycheck plans</Text><Text style={{ color: muted }}>{data.paychecks.filter(p => p.status === 'planned').length} planned · {data.paychecks.filter(p => p.status !== 'planned').length} received</Text><Action label="View all paychecks →" variant="text" onPress={() => router.push('/paychecks')} /></Card> : quickView === 'accounts' ? <>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}><Metric label="Actual cash balances" amount={formatMoney(accountSummary.totalCashCents)} detail="Checking, savings, and cash" /><Metric label="Available after goal holds" amount={formatMoney(accountSummary.availableCashCents)} detail="Recorded balances minus pending reservations" /></View>
+      <Text style={{ color: colors.danger }}>Credit card debt owed: {formatMoney(accountSummary.creditCardDebtCents)}</Text><Action label="View accounts →" variant="text" onPress={() => router.push('/accounts')} />
+    </> : <Card><Metric label="Completed goal savings" amount={formatMoney(savingsSummary.savedCents)} detail={`${savingsSummary.progressPercent.toFixed(1)}% of ${formatMoney(savingsSummary.targetCents)} targeted · excludes planned and pending allocations`} /><Action label="View savings goals →" variant="text" onPress={() => router.push('/goals')} /></Card>}
 
     <TourHighlight id="home-next-payday"><Card>
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
@@ -160,7 +149,7 @@ export default function Dashboard() {
           <Field label="Repeat every how many days?" value={paydayIntervalInput} onChangeText={setPaydayIntervalInput} keyboardType="numeric" placeholder="e.g. 10" />
           <Text style={{ color: muted, fontSize: 12 }}>Scuttle repeats your date every N days. Use 1–365 days.</Text>
         </> : null}
-        <Action label="Save payday" variant="primary" fullWidth onPress={() => void savePayday()} />
+        <Action label="Save payday" variant="primary" fullWidth onPress={() => savePayday()} />
       </> : null}
       <Action label="View paycheck" fullWidth onPress={() => recent ? router.push({ pathname: '/paycheck/[id]', params: { id: recent.id } }) : router.push('/paychecks')} />
     </Card></TourHighlight>
@@ -170,25 +159,25 @@ export default function Dashboard() {
       <Text style={{ color: muted, fontSize: 12 }}>Plan for these charges with your paycheck.</Text>
       {upcomingSubscriptions.map(({ item, dueDate }) => {
         const planned = !!planPaycheck && data.allocations.some(allocation => allocation.subscriptionId === item.id && allocation.paycheckId === planPaycheck.id);
-        return <View key={item.id} style={{ paddingVertical: 7, borderTopWidth: 1, borderTopColor: '#e5e5e5', gap: 6 }}>
+        return <View key={item.id} style={{ paddingVertical: 7, borderTopWidth: 1, borderTopColor: colors.border, gap: 6 }}>
           <Pressable onPress={() => router.push({ pathname: '/transactions', params: { editId: item.id } })} style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 8 }}>
             <View style={{ flex: 1 }}><Text style={{ color: ink, fontWeight: '600' }}>{item.description}</Text><Text style={{ color: muted, fontSize: 12 }}>Due {formatDateDisplay(dueDate)}{item.categoryId ? ` · ${data.categories.find(category => category.id === item.categoryId)?.name ?? 'Category'}` : ''}</Text></View>
             <Text style={{ color: ink }}>{formatMoney(item.amountCents)}</Text>
           </Pressable>
-          {planned ? <Text style={{ color: muted, fontSize: 12 }}>Included in paycheck plan · {formatDateDisplay(planPaycheck!.receivedAt)}</Text> : <Action label="Add to paycheck plan" onPress={() => void planSubscription(item.id)} />}
+          {planned ? <Text style={{ color: muted, fontSize: 12 }}>Included in paycheck plan · {formatDateDisplay(planPaycheck!.receivedAt)}</Text> : <Action label="Add to paycheck plan" onPress={() => planSubscription(item.id)} />}
         </View>;
       })}
     </Card> : null}
 
-    <SectionTitle>Quick Actions</SectionTitle>
-    <TourHighlight id="home-quick-actions"><View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 9 }}>
+    <SectionTitle>Your next move</SectionTitle>
+    <TourHighlight id="home-quick-actions"><View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 9 }}>
       <QuickAction label="Add paycheck" onPress={() => router.push({ pathname: '/paychecks', params: { add: '1' } })} />
       <QuickAction label="Add expense" onPress={() => router.push('/transaction/new')} />
       <QuickAction label="Budget money" onPress={() => router.push('/budget')} />
-      <QuickAction label="View balances" onPress={() => router.push('/accounts')} />
+      <QuickAction label="Transfer money" onPress={() => router.push({ pathname: '/transaction/new', params: { type: 'transfer' } })} />
     </View></TourHighlight>
 
-    <TourHighlight id="home-active-budgets"><SectionTitle right={<Action label="View all" variant="text" onPress={() => router.push('/budget')} />}>Active Budgets</SectionTitle>
+    <TourHighlight id="home-active-budgets"><SectionTitle right={<Action label="View all" variant="text" onPress={() => router.push('/budget')} />}>Your category budgets</SectionTitle>
     {allocations.length ? allocations.map(allocation => {
       const summary = allocationSummary(data, allocation);
       const category = data.categories.find(item => item.id === allocation.categoryId);
@@ -198,7 +187,7 @@ export default function Dashboard() {
 }
 
 function HeaderIcon({ label, mark, onPress }: { label: string; mark: string; onPress: () => void }) {
-  return <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onPress} style={({ pressed }) => ({ height: 36, width: 36, borderWidth: 1, borderColor: '#d9d9d9', borderRadius: 18, alignItems: 'center', justifyContent: 'center', backgroundColor: pressed ? '#ededed' : '#fff' })}><Text style={{ color: ink, fontSize: 18 }}>{mark}</Text></Pressable>;
+  return <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={onPress} style={({ pressed }) => ({ minHeight: 48, width: 48, borderWidth: 1, borderColor: colors.border, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: pressed ? colors.pressed : colors.surface })}><Text style={{ color: ink, fontSize: 18 }}>{mark}</Text></Pressable>;
 }
 
 function frequencyLabel(frequency?: PaydayFrequency, intervalDays?: number) {
@@ -210,24 +199,16 @@ function frequencyLabel(frequency?: PaydayFrequency, intervalDays?: number) {
 }
 
 function QuickView({ label, selected, onPress }: { label: string; selected: boolean; onPress: () => void }) {
-  return <Pressable accessibilityRole="button" accessibilityState={{ selected }} onPress={onPress} style={({ pressed }) => ({ flex: 1, minHeight: 42, borderWidth: 1, borderColor: selected ? ink : '#d5d5d5', borderRadius: 7, padding: 8, alignItems: 'center', justifyContent: 'center', backgroundColor: selected ? '#e8e8e8' : pressed ? '#f1f1f1' : '#fff' })}><Text style={{ color: ink, fontSize: 14, fontWeight: selected ? '700' : '600', textAlign: 'center' }}>{label}</Text></Pressable>;
-}
-
-function QuickMetric({ title, amount, detail }: { title: string; amount: string; detail: string }) {
-  return <Card style={{ flex: 1, minHeight: 72, padding: 7, gap: 2 }}>
-    <Text numberOfLines={1} style={{ color: muted, fontSize: 10 }}>{title}</Text>
-    <Text numberOfLines={1} adjustsFontSizeToFit style={{ fontSize: 17, color: ink, fontWeight: '700' }}>{amount}</Text>
-    <Text numberOfLines={2} style={{ color: muted, fontSize: 9 }}>{detail}</Text>
-  </Card>;
+  return <Pressable accessibilityRole="button" accessibilityState={{ selected }} onPress={onPress} style={({ pressed }) => ({ flexGrow: 1, flexBasis: 90, minHeight: 48, borderWidth: 1, borderColor: selected ? ink : colors.border, borderRadius: 14, padding: 8, alignItems: 'center', justifyContent: 'center', backgroundColor: selected ? colors.evergreen : pressed ? colors.subtle : colors.surface })}><Text style={{ color: selected ? colors.onPrimary : ink, fontSize: 14, fontWeight: selected ? '700' : '600', textAlign: 'center' }}>{label}</Text></Pressable>;
 }
 
 function QuickAction({ label, onPress }: { label: string; onPress: () => void }) {
-  return <Pressable onPress={onPress} style={({ pressed }) => ({ width: '47%', minHeight: 43, borderWidth: 1, borderColor: '#d5d5d5', borderRadius: 7, padding: 9, alignItems: 'center', justifyContent: 'center', backgroundColor: pressed ? '#e9e9e9' : '#fff' })}><Text style={{ color: ink, textAlign: 'center' }}>{label}</Text></Pressable>;
+  return <Pressable accessibilityRole="button" onPress={onPress} style={({ pressed }) => ({ flexGrow: 1, flexBasis: '45%', minHeight: 52, borderWidth: 1, borderColor: colors.border, borderRadius: 14, padding: 9, alignItems: 'center', justifyContent: 'center', backgroundColor: pressed ? colors.pressed : colors.surface })}><Text style={{ color: ink, textAlign: 'center' }}>{label}</Text></Pressable>;
 }
 
 function PressableBudget({ title, spent, allocated, remaining, onPress }: { title: string; spent: number; allocated: number; remaining: number; onPress: () => void }) {
-  return <Pressable onPress={onPress} style={({ pressed }) => ({ borderWidth: 1, borderColor: '#e2e2e2', borderRadius: 12, padding: 12, gap: 8, backgroundColor: pressed ? '#f0f0f0' : '#fff' })}>
-    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}><Text style={{ color: ink, fontWeight: '600' }}>{title}</Text><Text style={{ color: muted, fontSize: 12 }}>{formatMoney(remaining)} left</Text></View>
-    <ProgressBar value={spent} max={allocated} />
+  return <Pressable accessibilityRole="button" onPress={onPress} style={({ pressed }) => ({ borderWidth: 1, borderColor: colors.border, borderRadius: 20, padding: 18, gap: 8, backgroundColor: pressed ? colors.pressed : colors.surface })}>
+    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}><Text style={{ color: ink, fontWeight: '600' }}>{title}</Text><Text style={{ color: remaining < 0 ? colors.danger : muted, fontSize: 13 }}>{formatMoney(Math.abs(remaining))} {remaining < 0 ? 'over budget' : 'remaining'}</Text></View>
+    <ProgressBar value={spent} max={allocated} /><Text style={{ color: muted, fontSize: 12 }}>{formatMoney(spent)} spent of {formatMoney(allocated)} assigned</Text>
   </Pressable>;
 }

@@ -1,21 +1,57 @@
 import React, { useMemo, useState } from 'react';
-import { Text } from 'react-native';
-import { Link } from 'expo-router';
-import { Action, DateField, Feedback, Page } from '../src/components/ui';
+import { View } from 'react-native';
+import { useRouter } from 'expo-router';
+import { Text } from '../src/design/Text';
+import { colors } from '../src/design/theme';
+import { Action, Card, DateField, Field, Feedback, Page, SectionTitle, SelectId } from '../src/components/ui';
+import { EmptyState } from '../src/components/brand';
+import { activityRows, filterActivity } from '../src/components/activity';
 import { formatMoney } from '../src/domain/money';
 import { useData } from '../src/state/DataProvider';
+import { useCrud } from '../src/components/hooks';
 import { formatDateDisplay, normalizeDateInput } from '../src/domain/date';
 
-export default function History(){const {data}=useData();const [from,setFrom]=useState(''),[to,setTo]=useState(''),[category,setCategory]=useState(''),[paycheck,setPaycheck]=useState(''),[account,setAccount]=useState('');
-const items=useMemo(()=>{
- const normalizedFrom=from?normalizeDateInput(from):''; const normalizedTo=to?normalizeDateInput(to):'';
- const rows:any[]=[];
- data.paychecks.forEach(p=>rows.push({id:`p-${p.id}`,date:p.receivedAt,label:`Paycheck · ${p.source??'Income'}`,amount:p.amountCents,detail:`${p.status === 'planned' ? 'Planned income' : 'Income received'}${p.accountId?` · ${data.accounts.find(a=>a.id===p.accountId)?.name??'Account'}`:''}`,paycheckId:p.id,accountId:p.accountId,route:'/paychecks'}));
- data.allocations.forEach(a=>{const p=data.paychecks.find(x=>x.id===a.paycheckId);const c=data.categories.find(x=>x.id===a.categoryId);rows.push({id:`a-${a.id}`,date:p?.receivedAt??'',label:`Allocation · ${c?.name??'Category'}`,amount:a.amountCents,detail:`Paycheck ${p?.receivedAt??'missing'}`,categoryId:a.categoryId,paycheckId:a.paycheckId,route:'/budget'});});
- data.transactions.forEach(t=>rows.push({id:`t-${t.id}`,date:t.date,label:`${t.type} · ${t.description}`,amount:t.amountCents,detail:`${data.categories.find(c=>c.id===t.categoryId)?.name??''}${data.accounts.find(a=>a.id===t.accountId)?` · ${data.accounts.find(a=>a.id===t.accountId)?.name}`:''}`,categoryId:t.categoryId,accountId:t.accountId,toAccountId:t.toAccountId,paycheckId:t.paycheckId??data.allocations.find(a=>a.id===t.allocationId)?.paycheckId,route:'/transactions'}));
- data.contributions.forEach(c=>rows.push({id:`c-${c.id}`,date:c.date,label:`Savings contribution · ${data.goals.find(g=>g.id===c.goalId)?.name??'Goal'}`,amount:c.amountCents,detail:c.note??'Goal ledger',route:'/goals'}));
- return rows.filter(x=>(!from||!normalizedFrom||x.date>=normalizedFrom)&&(!to||!normalizedTo||x.date<=normalizedTo)&&(!category||x.categoryId===category)&&(!paycheck||x.paycheckId===paycheck)&&(!account||x.accountId===account||x.toAccountId===account)).sort((a,b)=>b.date.localeCompare(a.date));
-},[data,from,to,category,paycheck,account]);
-return <Page title="Financial history"><Feedback /><DateField label="From date" value={from} onChangeText={setFrom} optional/><DateField label="To date" value={to} onChangeText={setTo} optional/><Text>Category filter</Text><Action label={category?'Clear category filter':'All categories'} onPress={()=>setCategory('')}/>{data.categories.map(c=><Action key={c.id} label={`${category===c.id?'✓ ':''}${c.name}`} onPress={()=>setCategory(category===c.id?'':c.id)}/>)}<Text>Paycheck filter</Text><Action label={paycheck?'Clear paycheck filter':'All paychecks'} onPress={()=>setPaycheck('')}/>{data.paychecks.map(p=><Action key={p.id} label={`${paycheck===p.id?'✓ ':''}${formatDateDisplay(p.receivedAt)} · ${formatMoney(p.amountCents)}`} onPress={()=>setPaycheck(paycheck===p.id?'':p.id)}/>)}<Text>Account filter</Text><Action label={account?'Clear account filter':'All accounts'} onPress={()=>setAccount('')}/>{data.accounts.map(a=><Action key={a.id} label={`${account===a.id?'✓ ':''}${a.name}`} onPress={()=>setAccount(account===a.id?'':a.id)}/>)}
-{items.length?items.map(item=><Link key={item.id} href={item.route}><Text>{formatDateDisplay(item.date)} · {item.label} · {formatMoney(item.amount)} · {item.detail} · Open record list to edit</Text></Link>):<Text>No matching history records.</Text>}<Text>Records can be edited from their section:</Text><Link href="/paychecks">Paychecks</Link><Link href="/budget">Allocations</Link><Link href="/transactions">Transactions</Link><Link href="/goals">Contributions</Link></Page>;
+export default function History() {
+  const { data } = useData();
+  const router = useRouter();
+  const paycheckCrud = useCrud('paychecks');
+  const allocationCrud = useCrud('allocations');
+  const transactionCrud = useCrud('transactions');
+  const contributionCrud = useCrud('contributions');
+  const [search, setSearch] = useState('');
+  const [showFilters, setShowFilters] = useState(false);
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
+  const [category, setCategory] = useState('');
+  const [paycheck, setPaycheck] = useState('');
+  const [account, setAccount] = useState('');
+  const [kind, setKind] = useState('');
+  const rows = useMemo(() => activityRows(data), [data]);
+  const fromISO = from ? normalizeDateInput(from) : '';
+  const toISO = to ? normalizeDateInput(to) : '';
+  const invalidDate = (from && !fromISO) || (to && !toISO) || (fromISO && toISO && fromISO > toISO);
+  const filtered = filterActivity(rows, { search, from: fromISO || '', to: toISO || '', categoryId: category, paycheckId: paycheck, accountId: account, kind });
+  const items = invalidDate ? [] : filtered;
+  const activeFilters = [from, to, category, paycheck, account, kind].filter(Boolean).length;
+  const clear = () => { setFrom(''); setTo(''); setCategory(''); setPaycheck(''); setAccount(''); setKind(''); setSearch(''); };
+  const cruds = { paychecks: paycheckCrud, allocations: allocationCrud, transactions: transactionCrud, contributions: contributionCrud };
+  return <Page title="Your money in motion."><Feedback />
+    <Text style={{ color: colors.muted }}>Income, spending, and the plans behind them. Transfers and allocations stay separate.</Text>
+    <Field label="Search activity" value={search} onChangeText={setSearch} placeholder="Description, account, category, or date" />
+    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}><Action label={`${showFilters ? 'Hide' : 'Show'} filters${activeFilters ? ` (${activeFilters})` : ''}`} onPress={() => setShowFilters(!showFilters)} />{activeFilters || search ? <Action label="Clear all" variant="text" onPress={clear} /> : null}<Action label="Manage transactions" variant="text" onPress={() => router.push('/transactions')} /></View>
+    {showFilters ? <Card><SectionTitle>Find what you need</SectionTitle>
+      <SelectId label="Activity type" choices={['expense', 'income', 'transfer', 'paycheck', 'allocation', 'contribution', 'subscription'].map(id => ({ id, title: id[0].toUpperCase() + id.slice(1) }))} value={kind} onChange={setKind} />
+      <DateField label="From date" value={from} onChangeText={setFrom} optional /><DateField label="To date" value={to} onChangeText={setTo} optional />
+      <SelectId label="Category" choices={data.categories.map(c => ({ id: c.id, title: c.name }))} value={category} onChange={setCategory} />
+      <SelectId label="Paycheck" choices={data.paychecks.map(p => ({ id: p.id, title: `${p.source || 'Paycheck'} · ${formatDateDisplay(p.receivedAt)} · ${formatMoney(p.amountCents)}` }))} value={paycheck} onChange={setPaycheck} />
+      <SelectId label="Account" choices={data.accounts.map(a => ({ id: a.id, title: a.name }))} value={account} onChange={setAccount} />
+    </Card> : null}
+    {invalidDate ? <Text accessibilityRole="alert" style={{ color: colors.danger }}>Enter valid dates with the start on or before the end.</Text> : null}
+    {!items.length && !invalidDate ? <EmptyState title={rows.length ? 'No matches just yet.' : 'Your story starts here.'} detail={rows.length ? 'Try another search or clear your filters.' : 'Record a paycheck or transaction to see your financial activity here.'} /> : null}
+    {items.map((item, index) => <React.Fragment key={item.id}>
+      {index === 0 || items[index - 1].date !== item.date ? <SectionTitle>{formatDateDisplay(item.date)}</SectionTitle> : null}
+      <Card><View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'flex-start', gap: 8 }}><View style={{ flexGrow: 1, flexBasis: 150 }}><Text style={{ fontWeight: '800', fontSize: 16 }}>{item.title}</Text><Text style={{ color: colors.muted, fontSize: 13 }}>{item.detail}</Text></View><Text style={{ fontWeight: '800', fontSize: 18, color: item.sign === '−' ? colors.danger : item.sign === '+' ? colors.teal : colors.text, fontVariant: ['tabular-nums'] }}>{item.sign}{formatMoney(item.amountCents)}</Text></View>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}><Action label={item.collection === 'transactions' ? 'View / edit' : 'Open record'} variant="text" onPress={() => router.push({ pathname: item.route, params: item.params } as never)} /><Action label="Delete" variant="text" destructive onPress={() => cruds[item.collection].confirmDelete(item.recordId)} /></View></Card>
+    </React.Fragment>)}
+  </Page>;
 }
