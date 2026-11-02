@@ -21,14 +21,14 @@ export default function Paychecks() {
   const [date, setDate] = useState(todayDateInput());
   const [source, setSource] = useState('');
   const [notes, setNotes] = useState('');
-  const [fundingMode, setFundingMode] = useState<'paycheck' | 'account' | ''>('');
+  const [fundingMode, setFundingMode] = useState<'planned' | 'paycheck' | 'account' | ''>('');
   const [accountId, setAccountId] = useState('');
   useEffect(() => { if (params.add === '1' && !params.paycheckId) setFormOpen(true); }, [params.add, params.paycheckId]);
   useEffect(() => {
     if (!params.paycheckId || initializedId.current === params.paycheckId) return;
     const paycheck = data.paychecks.find(item => item.id === params.paycheckId);
     if (!paycheck) return;
-    setAmount((paycheck.amountCents / 100).toFixed(2)); setDate(formatDateInput(paycheck.receivedAt)); setSource(paycheck.source ?? ''); setNotes(paycheck.notes ?? ''); setAccountId(paycheck.remainingAccountId ?? paycheck.accountId ?? ''); setFundingMode(paycheck.accountId ? 'account' : 'paycheck');
+    setAmount((paycheck.amountCents / 100).toFixed(2)); setDate(formatDateInput(paycheck.receivedAt)); setSource(paycheck.source ?? ''); setNotes(paycheck.notes ?? ''); setAccountId(paycheck.remainingAccountId ?? paycheck.accountId ?? ''); setFundingMode(paycheck.status === 'planned' ? 'planned' : paycheck.accountId ? 'account' : 'paycheck');
     crud.setEditingId(paycheck.id); setFormOpen(true); initializedId.current = paycheck.id;
   }, [params.paycheckId, data.paychecks]);
   const reset = () => { setAmount(''); setDate(todayDateInput()); setSource(''); setNotes(''); setAccountId(''); setFundingMode(''); crud.cancel(); setFormOpen(false); };
@@ -41,7 +41,7 @@ export default function Paychecks() {
       const existing = data.paychecks.find(item => item.id === crud.editingId);
       if (existing?.accountId && fundingMode === 'paycheck') return reportError('This paycheck is already recorded in an account. Choose an account to move its remaining funds.');
       const amountCents = parseMoney(amount);
-      const ok = await crud.submit({ amountCents, receivedAt, source: source || undefined, notes: notes || undefined,
+      const ok = await crud.submit({ ...existing, status: fundingMode === 'planned' ? 'planned' : 'received', amountCents, receivedAt, source: source || undefined, notes: notes || undefined,
         accountId: existing?.accountId ?? (!existing && fundingMode === 'account' ? accountId : undefined),
         accountCreditCents: existing?.accountCreditCents ?? (!existing && fundingMode === 'account' ? amountCents : undefined),
         remainingAccountId: existing?.remainingAccountId ?? existing?.accountId ?? (!existing && fundingMode === 'account' ? accountId : undefined),
@@ -55,11 +55,12 @@ export default function Paychecks() {
   };
   return <Page title="Paychecks"><TourHighlight id="paychecks-main"><Feedback />
     {!formOpen ? <Action label="+ Add paycheck" variant="primary" fullWidth onPress={() => setFormOpen(true)} /> : <>
-      <Field label="Amount received" value={amount} onChangeText={setAmount} keyboardType="decimal-pad" placeholder="0.00" />
-      <DateField label="Date received" value={date} onChangeText={setDate} />
+      <Field label={fundingMode === 'planned' ? "Expected amount" : "Amount received"} value={amount} onChangeText={setAmount} keyboardType="decimal-pad" placeholder="0.00" />
+      <DateField label={fundingMode === 'planned' ? "Expected payment date" : "Date received"} value={date} onChangeText={setDate} />
       <Field label="Income source (optional)" value={source} onChangeText={setSource} />
       <Text style={{ fontWeight: '600' }}>Where should this paycheck be recorded?</Text>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+        {(!crud.editingId || data.paychecks.find(p => p.id === crud.editingId)?.status === 'planned') ? <Action label="Plan future paycheck" variant={fundingMode === 'planned' ? 'primary' : 'secondary'} onPress={() => setFundingMode('planned')} /> : null}
         <Action label="Budget paycheck only" variant={fundingMode === 'paycheck' ? 'primary' : 'secondary'} onPress={() => setFundingMode('paycheck')} />
         <Action label="Deposit to an account" variant={fundingMode === 'account' ? 'primary' : 'secondary'} onPress={() => setFundingMode('account')} />
       </View>
@@ -77,7 +78,7 @@ export default function Paychecks() {
       const depositName = data.accounts.find(account => account.id === p.accountId)?.name;
       const currentFundsName = data.accounts.find(account => account.id === (p.remainingAccountId ?? p.accountId))?.name;
       const accountDetail = p.accountId ? `Deposited to ${depositName ?? 'account'}${currentFundsName && currentFundsName !== depositName ? ` · remaining funds moved to ${currentFundsName}` : ''} · ` : 'Paycheck only · ';
-      return <RecordLine key={p.id} title={`${formatDateDisplay(p.receivedAt)} · ${formatMoney(p.amountCents)}`} detail={`${p.source ?? 'Income'} · ${accountDetail}${formatMoney(allocatedForPaycheck(data, p.id))} allocated · ${formatMoney(unallocatedForPaycheck(data, p.id))} left`} progress={{ value: allocatedForPaycheck(data, p.id), max: p.amountCents, label: `${p.amountCents ? Math.round(allocatedForPaycheck(data, p.id) / p.amountCents * 100) : 0}% allocated` }} onView={() => router.push({ pathname: '/paycheck/[id]', params: { id: p.id } })} onEdit={() => { setAmount((p.amountCents / 100).toFixed(2)); setDate(formatDateInput(p.receivedAt)); setSource(p.source ?? ''); setNotes(p.notes ?? ''); setAccountId(p.remainingAccountId ?? p.accountId ?? ''); setFundingMode(p.accountId ? 'account' : 'paycheck'); crud.setEditingId(p.id); setFormOpen(true); }} onDelete={() => crud.confirmDelete(p.id)} />;
+      return <RecordLine key={p.id} title={`${p.status === 'planned' ? 'Planned · ' : 'Received · '}${formatDateDisplay(p.receivedAt)} · ${formatMoney(p.amountCents)}`} detail={`${p.source ?? 'Income'} · ${accountDetail}${formatMoney(allocatedForPaycheck(data, p.id))} allocated · ${formatMoney(unallocatedForPaycheck(data, p.id))} left`} progress={{ value: allocatedForPaycheck(data, p.id), max: p.amountCents, label: `${p.amountCents ? Math.round(allocatedForPaycheck(data, p.id) / p.amountCents * 100) : 0}% allocated` }} onView={() => router.push({ pathname: '/paycheck/[id]', params: { id: p.id } })} onEdit={() => { setAmount((p.amountCents / 100).toFixed(2)); setDate(formatDateInput(p.receivedAt)); setSource(p.source ?? ''); setNotes(p.notes ?? ''); setAccountId(p.remainingAccountId ?? p.accountId ?? ''); setFundingMode(p.status === 'planned' ? 'planned' : p.accountId ? 'account' : 'paycheck'); crud.setEditingId(p.id); setFormOpen(true); }} onDelete={() => crud.confirmDelete(p.id)} />;
     })}
   </TourHighlight></Page>;
 }

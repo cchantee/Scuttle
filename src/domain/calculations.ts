@@ -2,7 +2,7 @@ import { AppData, BudgetAllocation, SavingsGoal, SubscriptionFrequency, Transact
 import { normalizeDateInput } from './date';
 
 export const allocatedForPaycheck = (data: AppData, paycheckId: string) =>
-  data.allocations.filter(x => x.paycheckId === paycheckId).reduce((sum, x) => sum + x.amountCents, 0);
+  data.allocations.filter(x => x.paycheckId === paycheckId).reduce((sum, x) => sum + x.amountCents, 0) + data.contributions.filter(x => x.paycheckId === paycheckId).reduce((sum, x) => sum + x.amountCents, 0);
 export const unallocatedForPaycheck = (data: AppData, paycheckId: string) =>
   (data.paychecks.find(x => x.id === paycheckId)?.amountCents ?? 0) - allocatedForPaycheck(data, paycheckId);
 export const spentForPaycheck = (data: AppData, paycheckId: string) => {
@@ -18,18 +18,18 @@ export const allocationSummary = (data: AppData, allocation: BudgetAllocation) =
 };
 /** All allocations belonging to paychecks whose budgets have not been archived. */
 export const activeBudgetAllocations = (data: AppData) => {
-  const activePaycheckIds = new Set(data.paychecks.filter(paycheck => !paycheck.budgetArchived).map(paycheck => paycheck.id));
+  const activePaycheckIds = new Set(data.paychecks.filter(paycheck => !paycheck.budgetArchived && paycheck.status !== 'planned').map(paycheck => paycheck.id));
   return data.allocations.filter(allocation => activePaycheckIds.has(allocation.paycheckId));
 };
 export const goalSaved = (data: AppData, goalId: string) => {
   const goal = data.goals.find(x => x.id === goalId);
-  return (goal?.initialSavedCents ?? 0) + data.contributions.filter(x => x.goalId === goalId).reduce((sum, x) => sum + x.amountCents, 0);
+  return (goal?.initialSavedCents ?? 0) + data.contributions.filter(x => x.goalId === goalId && (!x.paycheckId || data.paychecks.find(p => p.id === x.paycheckId)?.status !== 'planned')).reduce((sum, x) => sum + x.amountCents, 0);
 };
 /** Goal savings excluding funds that are still reserved/pending in an account. */
 export const completedGoalSaved = (data: AppData, goalId: string) => {
   const goal = data.goals.find(x => x.id === goalId);
   return (goal?.initialSavedCents ?? 0) + data.contributions
-    .filter(item => item.goalId === goalId && item.status !== 'pending')
+    .filter(item => item.goalId === goalId && item.status !== 'pending' && item.status !== 'allocated')
     .reduce((sum, item) => sum + item.amountCents, 0);
 };
 /** Dashboard account metrics include cash-like assets; card debt is reported separately. */
@@ -76,7 +76,7 @@ export const goalSummary = (data: AppData, goal: SavingsGoal) => {
  * A paycheck linked to an account is itself one income ledger event; allocations never alter account balances.
  */
 export function accountBalance(data: AppData, account: VirtualAccount): number {
-  const paycheckIncome = data.paychecks.filter(paycheck => paycheck.accountId === account.id)
+  const paycheckIncome = data.paychecks.filter(paycheck => paycheck.status !== 'planned' && paycheck.accountId === account.id)
     .reduce((sum, paycheck) => {
       const credited = paycheck.accountCreditCents ?? paycheck.amountCents;
       return sum + (account.type === 'credit_card' ? -credited : credited);
@@ -85,7 +85,7 @@ export function accountBalance(data: AppData, account: VirtualAccount): number {
 }
 /** End-of-day posted balance for deterministic historical interest calculations. */
 export function accountBalanceAt(data: AppData, account: VirtualAccount, date: string): number {
-  const paycheckIncome = data.paychecks.filter(paycheck => paycheck.accountId === account.id && paycheck.receivedAt <= date)
+  const paycheckIncome = data.paychecks.filter(paycheck => paycheck.status !== 'planned' && paycheck.accountId === account.id && paycheck.receivedAt <= date)
     .reduce((sum, paycheck) => {
       const credited = paycheck.accountCreditCents ?? paycheck.amountCents;
       return sum + (account.type === 'credit_card' ? -credited : credited);
@@ -122,6 +122,7 @@ export function validateTransaction(data: AppData, tx: Transaction): string | nu
   if (tx.type === 'expense' && tx.allocationId) {
     const allocation = data.allocations.find(x => x.id === tx.allocationId);
     if (!allocation) return 'Selected allocation does not exist.';
+    if (data.paychecks.find(p => p.id === allocation.paycheckId)?.status === 'planned') return 'Planned funds cannot be spent.';
     if (tx.categoryId && allocation.categoryId !== tx.categoryId) return 'Transaction category must match its allocation.';
   }
   if (tx.accountId && !data.accounts.some(x => x.id === tx.accountId)) return 'Selected account does not exist.';
@@ -184,6 +185,8 @@ export function validateAllocation(data: AppData, allocation: BudgetAllocation):
   if (!data.paychecks.some(x => x.id === allocation.paycheckId)) return 'Selected paycheck does not exist.';
   if (!data.categories.some(x => x.id === allocation.categoryId)) return 'Selected category does not exist.';
   if (!Number.isSafeInteger(allocation.amountCents) || allocation.amountCents < 0) return 'Allocation must be a non-negative amount.';
+  if (allocation.amountCents < spentForAllocation(data, allocation.id)) return 'Allocation cannot be less than its recorded spending.';
+  if (unallocatedForPaycheck(data, allocation.paycheckId) < 0) return 'Allocations exceed paycheck income. Reduce another allocation first.';
   if (allocation.subscriptionId) {
     const subscription = data.transactions.find(x => x.id === allocation.subscriptionId && x.type === 'subscription');
     if (!subscription) return 'The linked subscription does not exist.';

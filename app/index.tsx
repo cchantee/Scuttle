@@ -22,7 +22,7 @@ export default function Dashboard() {
   const [paydayInput, setPaydayInput] = useState(data.user.nextPayday ? formatDateInput(data.user.nextPayday) : '');
   const [paydayFrequency, setPaydayFrequency] = useState<PaydayFrequency>(data.user.paydayFrequency ?? 'weekly');
   const [paydayIntervalInput, setPaydayIntervalInput] = useState(data.user.paydayIntervalDays?.toString() ?? '');
-  const recent = [...data.paychecks].sort((a, b) => b.receivedAt.localeCompare(a.receivedAt))[0];
+  const recent = data.paychecks.filter(p => p.status !== 'planned').sort((a, b) => b.receivedAt.localeCompare(a.receivedAt))[0];
   useEffect(() => {
     if (walkthrough?.active) return;
     if (params.walkthrough === '1') {

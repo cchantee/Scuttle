@@ -23,7 +23,7 @@ export default function AllocationDetail() {
     <Text>Paycheck {paycheck ? formatDateDisplay(paycheck.receivedAt) : 'not found'}</Text>
     <Text>{formatMoney(summary.remainingCents)} remaining</Text>
     <Text>{formatMoney(summary.allocatedCents)} allocated · {formatMoney(summary.spentCents)} spent</Text>
-    {paycheck?.budgetArchived ? <Text>This paycheck budget is archived. New categorized expenses will use an active paycheck budget.</Text> : <Action label="+ Add transaction" variant="primary" fullWidth onPress={() => router.push({ pathname: '/transaction/new', params: { allocationId: allocation.id } })} />}
+    {paycheck?.status === 'planned' ? <Text>Planned allocation · funds are not available to spend.</Text> : paycheck?.budgetArchived ? <Text>This paycheck budget is archived. New categorized expenses will use an active paycheck budget.</Text> : <Action label="+ Add transaction" variant="primary" fullWidth onPress={() => router.push({ pathname: '/transaction/new', params: { allocationId: allocation.id } })} />}
     <Text style={{ fontWeight: '600' }}>Transactions</Text>
     {!expenses.length ? <Text>No expenses recorded for this allocation.</Text> : null}
     {expenses.map(tx => <RecordLine key={tx.id} title={tx.description} detail={`${formatDateDisplay(tx.date)} · ${formatMoney(tx.amountCents)}`} onEdit={() => router.push({ pathname: '/transactions', params: { editId: tx.id } })} onDelete={() => transactionCrud.confirmDelete(tx.id)} />)}
