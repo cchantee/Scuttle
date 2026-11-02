@@ -1,5 +1,6 @@
 import { AppData, BudgetAllocation, BudgetCategory, Id, Paycheck, SavingsContribution, SavingsGoal, Transaction, VirtualAccount } from './models';
-import { accountBalance, validateAllocation, validateTransaction } from './calculations';
+import { allocatedForPaycheck, spentForAllocation, accountBalance, validateAllocation, validateTransaction } from './calculations';
+import { newId } from './models';
 import { todayISODate } from './date';
 
 export interface StorageAdapter {
@@ -23,6 +24,13 @@ export function upsertRecord<C extends CollectionName>(data: AppData, collection
   const updated = { ...data, [collection]: next } as AppData;
   if (collection === 'paychecks') {
     const p = record as Paycheck;
+    const previous = data.paychecks.find(item => item.id === p.id);
+    if (previous && previous.status !== 'planned' && p.status === 'planned') return { data, error: 'Received income cannot become planned income.' };
+    if (previous?.status === 'planned' && p.status !== 'planned') return { data, error: 'Use Mark as Received to confirm planned income.' };
+    if (p.status === 'planned' && (p.accountId || p.accountCreditCents || p.remainingAccountId)) return { data, error: 'Planned paychecks cannot credit an account.' };
+    if (allocatedForPaycheck(updated, p.id) > p.amountCents) return { data, error: 'Allocations exceed paycheck income.' };
+    if (previous?.actualAmountCents !== undefined && (p.actualAmountCents !== previous.actualAmountCents || p.amountCents !== previous.amountCents || p.accountId !== previous.accountId || p.accountCreditCents !== previous.accountCreditCents || JSON.stringify(p.originalPlan) !== JSON.stringify(previous.originalPlan))) return { data, error: 'Confirmed receipt and original plan cannot be changed. Edit allocations separately.' };
+
     if (!Number.isSafeInteger(p.amountCents) || p.amountCents <= 0) return { data, error: 'Paycheck amount must be greater than zero.' };
     if (!validDate(p.receivedAt)) return { data, error: 'Enter a valid paycheck date in YYYY-MM-DD format.' };
     if (p.accountId && !updated.accounts.some(account => account.id === p.accountId)) return { data, error: 'The selected deposit account does not exist.' };
@@ -62,6 +70,7 @@ export function upsertRecord<C extends CollectionName>(data: AppData, collection
     const error = validateAllocation(updated, allocation);
     if (error) return { data, error };
     const old = data.allocations.find(x => x.id === allocation.id);
+    if (old && old.paycheckId !== allocation.paycheckId) return { data, error: 'An allocation cannot move to another paycheck.' };
     if (old && old.categoryId !== allocation.categoryId) {
       updated.transactions = updated.transactions.map(tx => tx.allocationId === allocation.id ? { ...tx, categoryId: allocation.categoryId } : tx);
     }
@@ -78,7 +87,7 @@ export function upsertRecord<C extends CollectionName>(data: AppData, collection
         ? updated.allocations.find(item => item.id === previous.allocationId)
         : undefined;
       const activeAllocation = updated.allocations
-        .filter(item => item.categoryId === tx.categoryId && !updated.paychecks.find(paycheck => paycheck.id === item.paycheckId)?.budgetArchived)
+        .filter(item => item.categoryId === tx.categoryId && !updated.paychecks.find(paycheck => paycheck.id === item.paycheckId)?.budgetArchived && updated.paychecks.find(paycheck => paycheck.id === item.paycheckId)?.status !== 'planned')
         .sort((a, b) => (updated.paychecks.find(p => p.id === b.paycheckId)?.receivedAt ?? '').localeCompare(updated.paychecks.find(p => p.id === a.paycheckId)?.receivedAt ?? ''))[0];
       const allocation = previousAllocation ?? activeAllocation;
       if (allocation) tx = { ...tx, allocationId: allocation.id };
@@ -98,11 +107,17 @@ export function upsertRecord<C extends CollectionName>(data: AppData, collection
   }
   if (collection === 'contributions') {
     const contribution = record as SavingsContribution;
+    const oldContribution = data.contributions.find(c => c.id === contribution.id);
+    if (oldContribution?.paycheckId && (oldContribution.paycheckId !== contribution.paycheckId || contribution.status !== 'allocated')) return { data, error: 'Edit this goal allocation from its paycheck.' };
     if (!data.goals.some(x => x.id === contribution.goalId)) return { data, error: 'Selected savings goal does not exist.' };
     if (!Number.isSafeInteger(contribution.amountCents) || contribution.amountCents <= 0) return { data, error: 'Contribution must be greater than zero.' };
     if (!validDate(contribution.date)) return { data, error: 'Enter a valid contribution date in YYYY-MM-DD format.' };
     if (contribution.accountId && !data.accounts.some(x => x.id === contribution.accountId)) return { data, error: 'Selected funding account does not exist.' };
-    if (contribution.status && !contribution.accountId) return { data, error: 'Choose a funding account for this contribution.' };
+    if (contribution.paycheckId) {
+      if (contribution.status !== 'allocated' || contribution.accountId || contribution.transactionId || !data.paychecks.some(p => p.id === contribution.paycheckId)) return { data, error: 'Invalid paycheck goal allocation.' };
+      if (allocatedForPaycheck(updated, contribution.paycheckId) > (data.paychecks.find(p => p.id === contribution.paycheckId)?.amountCents ?? 0)) return { data, error: 'Allocations exceed paycheck income.' };
+    } else if (contribution.status === 'allocated') return { data, error: 'Goal allocation requires a paycheck.' };
+    if (contribution.status && contribution.status !== 'allocated' && !contribution.accountId) return { data, error: 'Choose a funding account for this contribution.' };
     if (contribution.status && data.accounts.find(x => x.id === contribution.accountId)?.type === 'credit_card') return { data, error: 'Savings goals must be funded from a cash or savings account, not credit card debt.' };
     if (contribution.status === 'posted') {
       const linkedTransaction = data.transactions.find(x => x.id === contribution.transactionId);
@@ -121,6 +136,10 @@ export function upsertRecord<C extends CollectionName>(data: AppData, collection
     if (previous?.transactionId && (previous.amountCents !== contribution.amountCents || previous.accountId !== contribution.accountId)) return { data, error: 'A contribution linked to a posted transaction cannot change its amount or funding account.' };
     if (contribution.status === 'designated' && contribution.transactionId) return { data, error: 'A completed same-account designation cannot have a transfer transaction.' };
   }
+  if (collection === 'allocations' || collection === 'contributions') {
+    const entry = record as BudgetAllocation & SavingsContribution;
+    if (entry.paycheckId) updated.paychecks = updated.paychecks.map(p => p.id === entry.paycheckId ? { ...p, allocationHistory: [...(p.allocationHistory ?? []), { id: newId(), date: todayISODate(), description: `${index < 0 ? 'Added' : 'Edited'} ${collection === 'allocations' ? 'category' : 'goal'} allocation: ${entry.amountCents / 100}` }] } : p);
+  }
   return { data: updated };
 }
 function validDate(value: string) {
@@ -132,6 +151,7 @@ function validDate(value: string) {
 }
 
 export function removeRecord(data: AppData, collection: CollectionName, id: Id): StoreResult {
+  if (collection === 'paychecks' && data.contributions.some(x => x.paycheckId === id)) return { data, error: 'Remove this paycheck’s goal allocations first.' };
   if (collection === 'paychecks' && data.allocations.some(x => x.paycheckId === id)) return { data, error: 'This paycheck has allocations. Remove its allocations first.' };
   if (collection === 'paychecks' && data.transactions.some(x => x.paycheckId === id)) return { data, error: 'This paycheck has account moves in its transaction history. Remove those transfers first.' };
   if (collection === 'allocations' && data.transactions.some(x => x.allocationId === id)) return { data, error: 'This allocation has expenses. Reassign or remove them first.' };
@@ -148,6 +168,10 @@ export function removeRecord(data: AppData, collection: CollectionName, id: Id):
     const removed = data.transactions.find(item => item.id === id);
     if (removed?.goalContributionId) updated = { ...updated, contributions: updated.contributions.map(item => item.id === removed.goalContributionId ? { ...item, status: 'pending', transactionId: undefined } : item) };
     if (removed?.paycheckId && removed.toAccountId) updated = { ...updated, paychecks: updated.paychecks.map(paycheck => paycheck.id === removed.paycheckId && paycheck.remainingAccountId === removed.toAccountId ? { ...paycheck, remainingAccountId: removed.accountId } : paycheck) };
+  }
+  if (collection === 'allocations' || collection === 'contributions') {
+    const removed = (data[collection] as Array<BudgetAllocation | SavingsContribution>).find(item => item.id === id);
+    if (removed?.paycheckId) updated.paychecks = updated.paychecks.map(p => p.id === removed.paycheckId ? { ...p, allocationHistory: [...(p.allocationHistory ?? []), { id: newId(), date: todayISODate(), description: `Removed ${collection === 'allocations' ? 'category' : 'goal'} allocation: ${removed.amountCents / 100}` }] } : p);
   }
   return { data: updated } as StoreResult;
 }

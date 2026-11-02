@@ -73,7 +73,7 @@ export default function Budget() {
     {data.categories.map(category => <RecordLine key={category.id} title={category.name} detail="Budget category" onEdit={() => { setName(category.name); categoryCrud.setEditingId(category.id); setCategoryFormOpen(true); }} onDelete={() => categoryCrud.confirmDelete(category.id)} />)}
 
     {!allocationFormOpen ? <Action label="+ Allocate paycheck" variant="primary" fullWidth onPress={() => setAllocationFormOpen(true)} /> : <>
-      <SelectId label="Paycheck" choices={data.paychecks.map(item => ({ id: item.id, title: `${formatDateDisplay(item.receivedAt)} · ${formatMoney(item.amountCents)}`}))} value={paycheckId} onChange={setPaycheck} />
+      <SelectId label="Paycheck" choices={data.paychecks.map(item => ({ id: item.id, title: `${item.status === 'planned' ? 'Planned · ' : ''}${formatDateDisplay(item.receivedAt)} · ${formatMoney(item.amountCents)}`}))} value={paycheckId} onChange={setPaycheck} />
       <SelectId label="Category" choices={data.categories.map(item => ({ id: item.id, title: item.name }))} value={categoryId} onChange={setCategory} create="category" />
       <Field label="Allocated amount" value={amount} onChangeText={setAmount} keyboardType="decimal-pad" placeholder="0.00" />
       <Action label="Save allocation" variant="primary" fullWidth onPress={() => void allocationSave()} />
@@ -83,7 +83,7 @@ export default function Budget() {
     <Text style={{ fontWeight: '600', fontSize: 17 }}>Active paycheck budgets</Text>
     {!data.paychecks.some(paycheck => !paycheck.budgetArchived && data.allocations.some(item => item.paycheckId === paycheck.id)) ? <Text>No active paycheck budgets. Add allocations to start budgeting.</Text> : null}
     {data.paychecks.filter(paycheck => !paycheck.budgetArchived && data.allocations.some(item => item.paycheckId === paycheck.id)).map(paycheck => <React.Fragment key={paycheck.id}>
-      <Text>{formatDateDisplay(paycheck.receivedAt)}: {formatMoney(allocatedForPaycheck(data, paycheck.id))} allocated · {formatMoney(unallocatedForPaycheck(data, paycheck.id))} unallocated</Text>
+      <Text>{paycheck.status === 'planned' ? 'Planned · unavailable to spend · ' : ''}{formatDateDisplay(paycheck.receivedAt)}: {formatMoney(allocatedForPaycheck(data, paycheck.id))} allocated · {formatMoney(unallocatedForPaycheck(data, paycheck.id))} unallocated</Text>
       <Action label="Archive this paycheck budget" onPress={() => { void saveRecord('paychecks', { ...paycheck, budgetArchived: true }); }} />
       {data.allocations.filter(item => item.paycheckId === paycheck.id).map(allocation => <AllocationLine key={allocation.id} allocation={allocation} data={data} router={router} onEdit={() => { setPaycheck(allocation.paycheckId); setCategory(allocation.categoryId); setAmount((allocation.amountCents / 100).toFixed(2)); allocationCrud.setEditingId(allocation.id); setAllocationFormOpen(true); }} onDelete={() => allocationCrud.confirmDelete(allocation.id)} />)}
     </React.Fragment>)}
@@ -91,7 +91,7 @@ export default function Budget() {
     <Text style={{ fontWeight: '600', fontSize: 17 }}>Archived paycheck budgets</Text>
     {!data.paychecks.some(paycheck => paycheck.budgetArchived && data.allocations.some(item => item.paycheckId === paycheck.id)) ? <Text>No archived paycheck budgets.</Text> : null}
     {data.paychecks.filter(paycheck => paycheck.budgetArchived && data.allocations.some(item => item.paycheckId === paycheck.id)).map(paycheck => <React.Fragment key={paycheck.id}>
-      <Text>{formatDateDisplay(paycheck.receivedAt)}: {formatMoney(allocatedForPaycheck(data, paycheck.id))} allocated · {formatMoney(unallocatedForPaycheck(data, paycheck.id))} unallocated</Text>
+      <Text>{paycheck.status === 'planned' ? 'Planned · unavailable to spend · ' : ''}{formatDateDisplay(paycheck.receivedAt)}: {formatMoney(allocatedForPaycheck(data, paycheck.id))} allocated · {formatMoney(unallocatedForPaycheck(data, paycheck.id))} unallocated</Text>
       <Action label="Restore paycheck budget" onPress={() => { void saveRecord('paychecks', { ...paycheck, budgetArchived: false }); }} />
       {data.allocations.filter(item => item.paycheckId === paycheck.id).map(allocation => <AllocationLine key={allocation.id} allocation={allocation} data={data} router={router} onEdit={() => { setPaycheck(allocation.paycheckId); setCategory(allocation.categoryId); setAmount((allocation.amountCents / 100).toFixed(2)); allocationCrud.setEditingId(allocation.id); setAllocationFormOpen(true); }} onDelete={() => allocationCrud.confirmDelete(allocation.id)} />)}
     </React.Fragment>)}
