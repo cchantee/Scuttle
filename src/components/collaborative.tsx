@@ -1,16 +1,17 @@
 import React from 'react';
 import { Pressable, View } from 'react-native';
 import { colors } from '../design/theme';
-import { Crab, CoastalScene } from './coastal';
+import { Crab } from './coastal';
 import { Text } from './typography';
 
-export function HarborHero({ name, safeToSpend, detail }: { name: string; safeToSpend: string; detail: string }) {
-  return <View style={{ minHeight: 184, padding: 18, borderRadius: 18, overflow: 'hidden', backgroundColor: colors.text, gap: 5 }}>
-    <View pointerEvents="none" style={{ position: 'absolute', opacity: .28, left: 0, right: 0, bottom: -18 }}><CoastalScene height={142} /></View>
-    <View style={{ alignSelf: 'flex-end', marginBottom: 2 }}><Crab animate size={62} /></View>
+export function HarborHero({ safeToSpend, detail, action }: { safeToSpend: string; detail: string; action: { label: string; onPress: () => void } }) {
+  return <View style={{ minHeight: 184, padding: 18, borderRadius: 18, overflow: 'hidden', backgroundColor: colors.text, gap: 7 }}>
+    <View pointerEvents="none" style={{ position: 'absolute', right: -28, bottom: -18, width: 235, height: 85, borderRadius: 90, backgroundColor: '#315866', opacity: .72 }} />
+    <View pointerEvents="none" style={{ position: 'absolute', left: -28, bottom: -36, width: 225, height: 88, borderRadius: 90, backgroundColor: '#42716F', opacity: .56 }} />
     <Text style={{ color: '#fff', fontSize: 15 }}>Safe to Spend ⓘ</Text>
     <Text role="money" style={{ color: '#fff', fontSize: 40, lineHeight: 45 }}>{safeToSpend}</Text>
-    <Text style={{ color: '#EAF4F0', fontSize: 13, maxWidth: '76%' }}>{detail}</Text>
+    <Text style={{ color: '#EAF4F0', fontSize: 13, maxWidth: '82%' }}>{detail}</Text>
+    <Pressable accessibilityRole="button" onPress={action.onPress} style={({ pressed }) => ({ alignSelf: 'flex-start', minHeight: 35, paddingHorizontal: 12, borderRadius: 18, justifyContent: 'center', backgroundColor: pressed ? '#DDEBE5' : '#FFFDFC' })}><Text style={{ color: colors.text, fontSize: 13, fontWeight: '700' }}>{action.label} →</Text></Pressable>
   </View>;
 }
 
