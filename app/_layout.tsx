@@ -30,6 +30,7 @@ function Routes() {
       <Stack.Screen name="accounts" />
       <Stack.Screen name="goals" />
       <Stack.Screen name="history" />
+      <Stack.Screen name="insights" />
       <Stack.Screen name="more" />
       <Stack.Screen name="profile" options={{ title: 'Profile' }} />
       <Stack.Screen name="account/[id]" options={{ title: 'Account details' }} />

@@ -1,11 +1,12 @@
 import { Platform } from 'react-native';
-/** Human-authored Scuttle palette and typography assignments, approved 2026-11-05. */
+/** Collaborative visual tokens: human coastal direction, AI-proposed clarity refinements. */
 export const colors = {
-  background: '#FAF9F6', surface: '#FFFFFF', text: '#344447', muted: '#69777A',
-  border: '#E9E7E2', track: '#ECEBE7', blue: '#8FB3C0', glass: '#DCE7DA',
-  coral: '#D58A71', sand: '#E4B793', shell: '#EFD3C1', mist: '#D9DFE6', teal: '#869F9F',
+  background: '#F7F2E8', surface: '#FFFDFC', text: '#203E4B', muted: '#5F7378',
+  border: '#E3D9C9', track: '#EDE4D8', blue: '#85AFA3', glass: '#DDEBE5',
+  coral: '#F58A70', sand: '#E5C89C', shell: '#F4E1C7', mist: '#D8E7E5', teal: '#5D9588',
 };
-export const fonts = { default: 'Playful Lines', wordmark: 'Playful Lines', message: 'Mayonice', money: Platform.select({ ios: 'System', android: 'sans-serif', default: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' })!, greeting: 'Stay Playful' };
+const system = Platform.select({ ios: 'System', android: 'sans-serif', default: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' })!;
+export const fonts = { default: system, wordmark: 'Playful Lines', message: 'Mayonice', money: system, greeting: system };
 export const fontAssets = {
   'Playful Lines': require('../../assets/fonts/playful-lines/PlayfulLines.otf'),
   Mayonice: require('../../assets/fonts/mayonice/Mayonice.ttf'),
