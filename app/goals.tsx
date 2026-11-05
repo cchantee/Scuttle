@@ -37,7 +37,7 @@ export default function Goals() {
     {!formOpen ? <Action label="+ Create goal" variant="primary" fullWidth onPress={() => router.push('/goal/new')} /> : <>
       <Field label="Goal name" value={name} onChangeText={setName} />
       <Field label="Target amount ($)" value={target} onChangeText={setTarget} keyboardType="decimal-pad" />
-      <Disclosure title="Starting progress & target date" initiallyOpen={Boolean(crud.editingId)}><Field label="Already saved ($)" value={initial} onChangeText={setInitial} keyboardType="decimal-pad" hint="Starting goal progress only; this does not change your account balance." /><DateField label="Target date" value={targetDate} onChangeText={setTargetDate} optional /></Disclosure>
+      <Disclosure title="Already saved & target date" initiallyOpen={Boolean(crud.editingId)}><Field label="Already saved ($)" value={initial} onChangeText={setInitial} keyboardType="decimal-pad" hint="For example, enter $300 already held in savings or cash. This records starting goal progress without creating a duplicate transfer." /><DateField label="Target date" value={targetDate} onChangeText={setTargetDate} optional /></Disclosure>
       <Action label="Save goal" variant="primary" fullWidth onPress={() => save()} />
       <Action label="Cancel" onPress={reset} />
     </>}
