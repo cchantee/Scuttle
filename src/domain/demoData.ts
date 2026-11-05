@@ -104,7 +104,7 @@ export function removeSampleData(data: AppData): StoreResult {
   ));
   if (externalTransaction) return { data, error: 'Cannot delete sample data: a regular transaction uses a sample record. Reassign or delete that transaction first.' };
   const externalContribution = data.contributions.find(item => !isSample(item.id) && (
-    isSample(item.goalId) || isSample(item.accountId) || isSample(item.transactionId)
+    isSample(item.goalId) || isSample(item.accountId) || isSample(item.transactionId) || isSample(item.paycheckId)
   ));
   if (externalContribution) return { data, error: 'Cannot delete sample data: a regular savings contribution uses a sample record. Reassign or delete that contribution first.' };
 

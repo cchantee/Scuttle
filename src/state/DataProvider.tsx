@@ -1,6 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { AppData, emptyData, PaydayFrequency, Transaction, newId } from '../domain/models';
-import { CollectionName, completeGoalContributionInAccount, removeRecord, StorageAdapter, transferGoalContribution, upsertRecord } from '../domain/store';
+import { CollectionName, receivePlannedPaycheck, reallocateBudget, completeGoalContributionInAccount, removeRecord, StorageAdapter, transferGoalContribution, upsertRecord } from '../domain/store';
 import { AsyncStorageAdapter } from '../storage/asyncStorage';
 import { isCloudConfigured, supabase } from '../backend/supabase';
 import { SupabaseStorageAdapter } from '../storage/supabaseStorage';
@@ -11,6 +11,8 @@ import { todayISODate } from '../domain/date';
 import { addSampleData, removeSampleData } from '../domain/demoData';
 
 interface DataContextValue {
+  receivePaycheck: (id: string, amount: number, date: string, accountId: string) => Promise<boolean>;
+  moveBudgetMoney: (source: string, category: string | undefined, goal: string | undefined, amount: number) => Promise<boolean>;
   data: AppData; loading: boolean; error: string | null; saveRecord: (collection: CollectionName, record: any) => Promise<boolean>;
   deleteRecord: (collection: CollectionName, id: string) => Promise<boolean>; clearError: () => void;
   reportError: (message: string) => void; movePaycheckToAccount: (paycheckId: string, accountId: string) => Promise<boolean>;
@@ -107,6 +109,16 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       return false;
     }
   }, [authUser, loading]);
+  const receivePaycheck = useCallback((id: string, amount: number, date: string, accountId: string) => enqueue(async () => {
+    const result = receivePlannedPaycheck(dataRef.current, id, amount, date, accountId);
+    if (result.error) { setError(result.error); return false; }
+    return commit(result.data);
+  }), [enqueue, commit]);
+  const moveBudgetMoney = useCallback((source: string, category: string | undefined, goal: string | undefined, amount: number) => enqueue(async () => {
+    const result = reallocateBudget(dataRef.current, source, category, goal, amount, newId(), todayISODate());
+    if (result.error) { setError(result.error); return false; }
+    return commit(result.data);
+  }), [enqueue, commit]);
   const saveRecord = useCallback((collection: CollectionName, record: any) => enqueue(async () => {
     const result = upsertRecord(dataRef.current, collection, record);
     if (result.error) { setError(result.error); return false; }
@@ -119,7 +131,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   }), [enqueue, commit]);
   const movePaycheckToAccount = useCallback((paycheckId: string, accountId: string) => enqueue(async () => {
     const paycheck = dataRef.current.paychecks.find(item => item.id === paycheckId);
-    if (!paycheck) { setError('This paycheck could not be found.'); return false; }
+    if (!paycheck || paycheck.status === 'planned') { setError('Receive this paycheck before moving its funds.'); return false; }
     if (!dataRef.current.accounts.some(item => item.id === accountId)) { setError('Choose an account that still exists.'); return false; }
     const remaining = remainingForPaycheck(dataRef.current, paycheckId);
     if (remaining <= 0) { setError('This paycheck has no unspent amount left to move. Its linked allocations and expenses remain in the budget history.'); return false; }
@@ -218,7 +230,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     const { error: authError } = await supabase.auth.signOut();
     if (authError) throw authError;
   }, []);
-  const value = useMemo(() => ({ data, loading, error, saveRecord, deleteRecord, saveNextPayday, loadSampleData, deleteSampleData, clearError: () => setError(null), reportError: (message: string) => setError(message), movePaycheckToAccount, planSubscription, settleGoalContribution, completeGoalContributionInAccount: completeGoalContribution, postMonthlyInterest, authConfigured: isCloudConfigured, authLoading, authUser, signIn, signUp, completeWalkthrough, signOut }), [data, loading, error, saveRecord, deleteRecord, saveNextPayday, loadSampleData, deleteSampleData, movePaycheckToAccount, planSubscription, settleGoalContribution, completeGoalContribution, postMonthlyInterest, authLoading, authUser, signIn, signUp, completeWalkthrough, signOut]);
+  const value = useMemo(() => ({ receivePaycheck, moveBudgetMoney, data, loading, error, saveRecord, deleteRecord, saveNextPayday, loadSampleData, deleteSampleData, clearError: () => setError(null), reportError: (message: string) => setError(message), movePaycheckToAccount, planSubscription, settleGoalContribution, completeGoalContributionInAccount: completeGoalContribution, postMonthlyInterest, authConfigured: isCloudConfigured, authLoading, authUser, signIn, signUp, completeWalkthrough, signOut }), [receivePaycheck, moveBudgetMoney, data, loading, error, saveRecord, deleteRecord, saveNextPayday, loadSampleData, deleteSampleData, movePaycheckToAccount, planSubscription, settleGoalContribution, completeGoalContribution, postMonthlyInterest, authLoading, authUser, signIn, signUp, completeWalkthrough, signOut]);
   return <Context.Provider value={value}>{children}</Context.Provider>;
 }
 export function useData() { const value = useContext(Context); if (!value) throw new Error('useData must be used inside DataProvider'); return value; }

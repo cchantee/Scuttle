@@ -9,7 +9,7 @@ export interface User {
   id: Id; displayName: string; nextPayday?: string; paydayFrequency?: PaydayFrequency; paydayIntervalDays?: number;
 }
 /** A paycheck can be kept standalone or linked directly as income to a virtual account. */
-export interface Paycheck { id: Id; amountCents: number; receivedAt: string; source?: string; notes?: string; accountId?: Id; accountCreditCents?: number; remainingAccountId?: Id; budgetArchived?: boolean }
+export interface Paycheck { status?: 'planned' | 'received'; id: Id; amountCents: number; receivedAt: string; source?: string; notes?: string; accountId?: Id; accountCreditCents?: number; remainingAccountId?: Id; budgetArchived?: boolean }
 export interface BudgetCategory { id: Id; name: string }
 export interface BudgetAllocation { id: Id; paycheckId: Id; categoryId: Id; amountCents: number; subscriptionId?: Id }
 export interface Transaction {
@@ -34,7 +34,7 @@ export interface VirtualAccount {
   notes?: string;
 }
 export interface SavingsGoal { id: Id; name: string; targetCents: number; initialSavedCents: number; targetDate?: string }
-export interface SavingsContribution { id: Id; goalId: Id; amountCents: number; date: string; note?: string; accountId?: Id; status?: 'pending' | 'designated' | 'posted'; transactionId?: Id }
+export interface SavingsContribution { paycheckId?: Id; id: Id; goalId: Id; amountCents: number; date: string; note?: string; accountId?: Id; status?: 'pending' | 'designated' | 'posted'; transactionId?: Id }
 export interface AppData {
   version: 2; user: User; paychecks: Paycheck[]; categories: BudgetCategory[]; allocations: BudgetAllocation[];
   transactions: Transaction[]; accounts: VirtualAccount[]; goals: SavingsGoal[]; contributions: SavingsContribution[];

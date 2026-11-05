@@ -1,5 +1,5 @@
 import { AppData, BudgetAllocation, BudgetCategory, Id, Paycheck, SavingsContribution, SavingsGoal, Transaction, VirtualAccount } from './models';
-import { accountBalance, validateAllocation, validateTransaction } from './calculations';
+import { accountBalance, allocatedForPaycheck, spentForAllocation, validateAllocation, validateTransaction } from './calculations';
 import { todayISODate } from './date';
 
 export interface StorageAdapter {
@@ -23,6 +23,10 @@ export function upsertRecord<C extends CollectionName>(data: AppData, collection
   const updated = { ...data, [collection]: next } as AppData;
   if (collection === 'paychecks') {
     const p = record as Paycheck;
+    if (p.status && p.status !== 'planned' && p.status !== 'received') return { data, error: 'Choose a valid paycheck status.' };
+    if (p.status === 'planned' && (p.accountId || p.remainingAccountId || p.accountCreditCents)) return { data, error: 'Planned income cannot be deposited before it is received.' };
+    const previous = data.paychecks.find(item => item.id === p.id);
+    if (previous && previous.status !== 'planned' && p.status === 'planned') return { data, error: 'A received paycheck cannot become planned income.' };
     if (!Number.isSafeInteger(p.amountCents) || p.amountCents <= 0) return { data, error: 'Paycheck amount must be greater than zero.' };
     if (!validDate(p.receivedAt)) return { data, error: 'Enter a valid paycheck date in YYYY-MM-DD format.' };
     if (p.accountId && !updated.accounts.some(account => account.id === p.accountId)) return { data, error: 'The selected deposit account does not exist.' };
@@ -78,7 +82,7 @@ export function upsertRecord<C extends CollectionName>(data: AppData, collection
         ? updated.allocations.find(item => item.id === previous.allocationId)
         : undefined;
       const activeAllocation = updated.allocations
-        .filter(item => item.categoryId === tx.categoryId && !updated.paychecks.find(paycheck => paycheck.id === item.paycheckId)?.budgetArchived)
+        .filter(item => item.categoryId === tx.categoryId && !updated.paychecks.find(paycheck => paycheck.id === item.paycheckId)?.budgetArchived && updated.paychecks.find(paycheck => paycheck.id === item.paycheckId)?.status !== 'planned')
         .sort((a, b) => (updated.paychecks.find(p => p.id === b.paycheckId)?.receivedAt ?? '').localeCompare(updated.paychecks.find(p => p.id === a.paycheckId)?.receivedAt ?? ''))[0];
       const allocation = previousAllocation ?? activeAllocation;
       if (allocation) tx = { ...tx, allocationId: allocation.id };
@@ -98,6 +102,9 @@ export function upsertRecord<C extends CollectionName>(data: AppData, collection
   }
   if (collection === 'contributions') {
     const contribution = record as SavingsContribution;
+    if (contribution.paycheckId && !data.paychecks.some(p => p.id === contribution.paycheckId)) return { data, error: 'The funding paycheck does not exist.' };
+    if (contribution.paycheckId && data.paychecks.find(p => p.id === contribution.paycheckId)?.status === 'planned') return { data, error: 'Receive the paycheck before contributing its money to a goal.' };
+    if (contribution.paycheckId && allocatedForPaycheck(updated, contribution.paycheckId) > updated.paychecks.find(p => p.id === contribution.paycheckId)!.amountCents) return { data, error: 'This goal amount exceeds the paycheck left to assign.' };
     if (!data.goals.some(x => x.id === contribution.goalId)) return { data, error: 'Selected savings goal does not exist.' };
     if (!Number.isSafeInteger(contribution.amountCents) || contribution.amountCents <= 0) return { data, error: 'Contribution must be greater than zero.' };
     if (!validDate(contribution.date)) return { data, error: 'Enter a valid contribution date in YYYY-MM-DD format.' };
@@ -132,6 +139,7 @@ function validDate(value: string) {
 }
 
 export function removeRecord(data: AppData, collection: CollectionName, id: Id): StoreResult {
+  if (collection === 'paychecks' && data.contributions.some(x => x.paycheckId === id)) return { data, error: 'This paycheck funds savings contributions. Remove or reassign them first.' };
   if (collection === 'paychecks' && data.allocations.some(x => x.paycheckId === id)) return { data, error: 'This paycheck has allocations. Remove its allocations first.' };
   if (collection === 'paychecks' && data.transactions.some(x => x.paycheckId === id)) return { data, error: 'This paycheck has account moves in its transaction history. Remove those transfers first.' };
   if (collection === 'allocations' && data.transactions.some(x => x.allocationId === id)) return { data, error: 'This allocation has expenses. Reassign or remove them first.' };
@@ -174,4 +182,37 @@ function periodEnd(period: string) {
 
 export function makeRecord<C extends CollectionName>(collection: C, fields: Omit<RecordOf<C>, 'id'>, id: Id): RecordOf<C> {
   return { ...fields, id } as RecordOf<C>;
+}
+
+
+/** Receive a plan once, preserving category assignments without a duplicate income event. */
+export function receivePlannedPaycheck(data: AppData, id: string, amountCents: number, date: string, accountId: string): StoreResult {
+  const paycheck = data.paychecks.find(p => p.id === id);
+  if (!paycheck || paycheck.status !== 'planned') return { data, error: 'This paycheck has already been received or is no longer available.' };
+  if (!data.accounts.some(a => a.id === accountId && a.type !== 'credit_card')) return { data, error: 'Choose a cash or savings account for your paycheck.' };
+  if (allocatedForPaycheck(data, id) > amountCents) return { data, error: 'Adjust your allocations to fit the actual paycheck before receiving it.' };
+  return upsertRecord(data, 'paychecks', { ...paycheck, status: 'received', amountCents, receivedAt: date, accountId, accountCreditCents: amountCents, remainingAccountId: accountId });
+}
+
+/** Change the plan in one snapshot; account balances and transactions are untouched. */
+export function reallocateBudget(data: AppData, sourceId: string, targetCategoryId: string | undefined, goalId: string | undefined, amountCents: number, contributionId: string, date: string): StoreResult {
+  const source = data.allocations.find(a => a.id === sourceId);
+  if (!source || !Number.isSafeInteger(amountCents) || amountCents <= 0) return { data, error: 'Choose a source category and a positive amount.' };
+  const paycheck = data.paychecks.find(p => p.id === source.paycheckId);
+  if (!paycheck || paycheck.budgetArchived || paycheck.status === 'planned') return { data, error: 'Choose a received, active paycheck budget.' };
+  if (source.subscriptionId) return { data, error: 'Edit this scheduled bill allocation directly before moving its money.' };
+  if (amountCents > source.amountCents - spentForAllocation(data, source.id)) return { data, error: 'Only unspent category money can be moved.' };
+  if (Boolean(targetCategoryId) === Boolean(goalId)) return { data, error: 'Choose one destination category or savings goal.' };
+  const reduced = upsertRecord(data, 'allocations', { ...source, amountCents: source.amountCents - amountCents });
+  if (reduced.error) return { data, error: reduced.error };
+  if (goalId) {
+    if (data.contributions.some(c => c.id === contributionId)) return { data, error: 'This contribution has already been recorded.' };
+    const accountId = paycheck.remainingAccountId ?? paycheck.accountId;
+    const result = upsertRecord(reduced.data, 'contributions', { id: contributionId, paycheckId: paycheck.id, goalId, amountCents, date, accountId, status: accountId ? 'pending' : undefined, note: `From ${data.categories.find(c => c.id === source.categoryId)?.name ?? 'budget category'}` });
+    return result.error ? { data, error: result.error } : result;
+  }
+  if (targetCategoryId === source.categoryId) return { data, error: 'Choose a different destination category.' };
+  const target = data.allocations.find(a => a.paycheckId === source.paycheckId && a.categoryId === targetCategoryId && !a.subscriptionId);
+  const result = upsertRecord(reduced.data, 'allocations', { id: target?.id ?? contributionId, paycheckId: source.paycheckId, categoryId: targetCategoryId!, amountCents: (target?.amountCents ?? 0) + amountCents });
+  return result.error ? { data, error: result.error } : result;
 }

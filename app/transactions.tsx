@@ -1,5 +1,8 @@
+import { Card } from '../src/components/ui';
+import { EmptyState } from '../src/components/coastal';
+import { Text } from '../src/components/typography';
 import React, { useEffect, useRef, useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { useLocalSearchParams, usePathname, useRouter } from 'expo-router';
 import { Action, DateField, Field, Feedback, Page, RecordLine, SelectId } from '../src/components/ui';
 import { useCrud } from '../src/components/hooks';
@@ -17,10 +20,12 @@ export default function Transactions() {
   const { data, loading, reportError, settleGoalContribution } = useData();
   const router = useRouter();
   const pathname = usePathname();
-  const params = useLocalSearchParams<{ allocationId?: string; accountId?: string; editId?: string; goalContributionId?: string }>();
+  const params = useLocalSearchParams<{ allocationId?: string; accountId?: string; editId?: string; goalContributionId?: string; type?: string }>();
   const [formOpen, setFormOpen] = useState(pathname === '/transaction/new');
+  const [filter, setFilter] = useState<'all' | 'expense' | 'income'>('all');
+  const [saved, setSaved] = useState(false);
   const [search, setSearch] = useState('');
-  const [kind, setKind] = useState<TransactionType>('expense');
+  const [kind, setKind] = useState<TransactionType>(params.type === 'transfer' ? 'transfer' : 'expense');
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
   const [date, setDate] = useState(todayDateInput());
@@ -49,7 +54,7 @@ export default function Transactions() {
     if (toEdit) { fill(toEdit); crud.setEditingId(toEdit.id); }
     const contribution = data.contributions.find(item => item.id === params.goalContributionId && item.status === 'pending');
     if (contribution) {
-      setKind('expense'); setDescription(`Goal contribution · ${data.goals.find(goal => goal.id === contribution.goalId)?.name ?? 'Savings goal'}`);
+      setKind('transfer'); setDescription(`Goal contribution · ${data.goals.find(goal => goal.id === contribution.goalId)?.name ?? 'Savings goal'}`);
       setAmount((contribution.amountCents / 100).toFixed(2)); setDate(todayDateInput()); setAccount(contribution.accountId ?? '');
       setCategory(''); setAllocation(''); setFormOpen(true);
     }
@@ -100,43 +105,45 @@ export default function Transactions() {
         subscriptionIntervalDays: kind === 'subscription' && subscriptionFrequency === 'custom' ? Number(subscriptionInterval) : undefined,
         nextDueDate: normalizedDueDate,
       });
-      if (ok) reset();
+      if (ok) { setSaved(true); reset(); }
     } catch (e) { reportError(e instanceof Error ? e.message : 'Invalid transaction.'); }
   };
   const filtered = [...data.transactions].sort((a, b) => b.date.localeCompare(a.date)).filter(tx => {
     const accountName = data.accounts.find(item => item.id === tx.accountId)?.name ?? '';
     const categoryName = data.categories.find(item => item.id === tx.categoryId)?.name ?? '';
     const query = search.trim().toLowerCase();
-    return !query || `${tx.description} ${tx.type} ${accountName} ${categoryName} ${tx.date}`.toLowerCase().includes(query);
+    return (filter === 'all' || tx.type === filter) && (!query || `${tx.description} ${tx.type} ${accountName} ${categoryName} ${tx.date}`.toLowerCase().includes(query));
   });
 
   return <Page title={pathname === '/transaction/new' ? 'Add transaction' : 'Transactions'}><TourHighlight id="expense-main"><Feedback />
+    {saved ? <Card><Text accessibilityRole="alert">Transaction saved.</Text></Card> : null}
     {!formOpen ? <>
+      <View style={{ flexDirection: 'row', gap: 8 }}>{(['all', 'expense', 'income'] as const).map(f => <Action key={f} label={f === 'all' ? 'All' : f === 'expense' ? 'Expenses' : 'Income'} variant={filter === f ? 'primary' : 'secondary'} onPress={() => setFilter(f)} />)}</View>
       <Field label="Search transactions" value={search} onChangeText={setSearch} placeholder="Search description, category, account" />
       <Action label="+ Add transaction" variant="primary" fullWidth onPress={() => router.push('/transaction/new')} />
     </> : <>
-      <View style={{ padding: 12, borderRadius: 10, backgroundColor: '#eee' }}><Text>Enter a purchase, income, transfer, or subscription reminder. Subscription reminders do not change account balances; log the charge as an expense when it is paid.</Text></View>
-      {params.goalContributionId ? <View style={{ padding: 12, borderRadius: 10, backgroundColor: '#eee' }}><Text>Transfer this reserved amount to another account. Scuttle records both sides, releases the pending hold, and keeps goal progress counted once.</Text></View> : null}
-      <Field label="Name / description" value={description} onChangeText={setDescription} placeholder="e.g. Groceries" />
+      <View style={{ padding: 12, borderRadius: 10, backgroundColor: '#D9DFE6' }}><Text>Enter a purchase, income, transfer, or subscription reminder. Subscription reminders do not change account balances; log the charge as an expense when it is paid.</Text></View>
+      {params.goalContributionId ? <View style={{ padding: 12, borderRadius: 10, backgroundColor: '#D9DFE6' }}><Text>Transfer this reserved amount to another account. Scuttle records both sides, releases the pending hold, and keeps goal progress counted once.</Text></View> : null}
       <Text style={{ fontWeight: '600' }}>Transaction type</Text>
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>{(params.goalContributionId ? ['expense', 'transfer'] as TransactionType[] : kinds).map(value => <Pressable key={value} accessibilityRole="button" accessibilityState={{ selected: kind === value }} onPress={() => setKind(value)} style={{ paddingHorizontal: 14, paddingVertical: 9, borderWidth: 1, borderColor: kind === value ? '#777' : '#dedede', borderRadius: 20, backgroundColor: kind === value ? '#888' : '#fff' }}><Text style={{ color: kind === value ? '#fff' : '#161616', fontWeight: kind === value ? '700' : '400' }}>{value === 'expense' ? 'Expense' : value === 'income' ? 'Income' : value === 'transfer' ? 'Transfer' : 'Subscription'}</Text></Pressable>)}</View>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>{(params.goalContributionId ? ['expense', 'transfer'] as TransactionType[] : kinds).map(value => <Pressable key={value} accessibilityRole="button" accessibilityState={{ selected: kind === value }} onPress={() => setKind(value)} style={{ paddingHorizontal: 14, paddingVertical: 9, borderWidth: 1, borderColor: kind === value ? '#69777A' : '#E9E7E2', borderRadius: 8, backgroundColor: kind === value ? '#344447' : '#fff' }}><Text style={{ color: kind === value ? '#fff' : '#344447', fontWeight: kind === value ? '700' : '400' }}>{value === 'expense' ? 'Expense' : value === 'income' ? 'Income' : value === 'transfer' ? 'Transfer' : 'Subscription'}</Text></Pressable>)}</View>
+      <Field label="Payee / description" value={description} onChangeText={setDescription} placeholder="e.g. Groceries" />
       {params.goalContributionId ? <Text>Pending amount to post: {formatMoney(parseMoney(amount) || 0)}</Text> : <Field label="Amount" value={amount} onChangeText={setAmount} keyboardType="decimal-pad" placeholder="0.00" />}
       {kind === 'subscription' ? <>
         <Text style={{ fontWeight: '600' }}>Repeat schedule</Text>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>{subscriptionFrequencies.map(value => <Pressable key={value} accessibilityRole="button" accessibilityState={{ selected: subscriptionFrequency === value }} onPress={() => setSubscriptionFrequency(value)} style={{ paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: subscriptionFrequency === value ? '#777' : '#dedede', borderRadius: 18, backgroundColor: subscriptionFrequency === value ? '#888' : '#fff' }}><Text style={{ color: subscriptionFrequency === value ? '#fff' : '#161616' }}>{value === 'biweekly' ? 'Every 2 weeks' : value === 'annual' ? 'Yearly' : value === 'custom' ? 'Other' : value[0].toUpperCase() + value.slice(1)}</Text></Pressable>)}</View>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>{subscriptionFrequencies.map(value => <Pressable key={value} accessibilityRole="button" accessibilityState={{ selected: subscriptionFrequency === value }} onPress={() => setSubscriptionFrequency(value)} style={{ paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: subscriptionFrequency === value ? '#69777A' : '#E9E7E2', borderRadius: 8, backgroundColor: subscriptionFrequency === value ? '#344447' : '#fff' }}><Text style={{ color: subscriptionFrequency === value ? '#fff' : '#344447' }}>{value === 'biweekly' ? 'Every 2 weeks' : value === 'annual' ? 'Yearly' : value === 'custom' ? 'Other' : value[0].toUpperCase() + value.slice(1)}</Text></Pressable>)}</View>
         {subscriptionFrequency === 'custom' ? <Field label="Repeat every (days)" value={subscriptionInterval} onChangeText={setSubscriptionInterval} keyboardType="numeric" placeholder="e.g. 30" /> : null}
         <DateField label="Next charge date" value={nextDueDate} onChangeText={setNextDueDate} />
       </> : <DateField label="Date" value={date} onChangeText={setDate} />}
       {kind === 'expense' ? <>
         {params.allocationId && data.allocations.some(item => item.id === params.allocationId) ? <Text>Budget category: {data.categories.find(item => item.id === data.allocations.find(a => a.id === params.allocationId)?.categoryId)?.name ?? 'Selected allocation'}</Text> : <>
           <SelectId label="Category (optional)" choices={data.categories.map(item => ({ id: item.id, title: item.name }))} value={categoryId} onChange={value => { setCategory(value); setAllocation(''); }} create="category" />
-          <Text style={{ color: '#666', fontSize: 12 }}>Expenses are applied to the matching active paycheck budget automatically.</Text>
+          <Text style={{ color: '#69777A', fontSize: 12 }}>Expenses are applied to the matching active paycheck budget automatically.</Text>
         </>}
       </> : kind === 'subscription' ? <>
         <SelectId label="Budget category (optional)" choices={data.categories.map(item => ({ id: item.id, title: item.name }))} value={categoryId} onChange={setCategory} create="category" />
-        <Text style={{ color: '#666', fontSize: 12 }}>This reminder appears on the dashboard and budget page when a charge is approaching.</Text>
+        <Text style={{ color: '#69777A', fontSize: 12 }}>This reminder appears on the dashboard and budget page when a charge is approaching.</Text>
       </> : null}
-      {params.goalContributionId ? <Text>Funding account: {data.accounts.find(item => item.id === accountId)?.name ?? 'Missing account'}</Text> : kind !== 'income' ? <SelectId label={kind === 'transfer' ? 'Source account' : kind === 'subscription' ? 'Account charged (optional)' : 'Account (optional)'} choices={data.accounts.map(item => ({ id: item.id, title: `${item.name}${item.type === 'credit_card' ? ' · credit card' : ''}`}))} value={accountId} onChange={value => { setAccount(value); if (toAccountId === value) setToAccount(''); }} create="account" /> : null}
+      {params.goalContributionId ? <Text>Funding account: {data.accounts.find(item => item.id === accountId)?.name ?? 'Missing account'}</Text> : <SelectId label={kind === 'transfer' ? 'Source account' : kind === 'subscription' ? 'Account charged (optional)' : 'Account (optional)'} choices={data.accounts.map(item => ({ id: item.id, title: `${item.name}${item.type === 'credit_card' ? ' · credit card' : ''}`}))} value={accountId} onChange={value => { setAccount(value); if (toAccountId === value) setToAccount(''); }} create="account" />}
       {kind === 'transfer' ? <SelectId label="Destination account" choices={data.accounts.filter(item => item.id !== accountId).map(item => ({ id: item.id, title: item.name }))} value={toAccountId} onChange={setToAccount} create="account" /> : null}
       <Field label="Notes (optional)" value={notes} onChangeText={setNotes} multiline />
       <Action label={crud.editingId ? 'Save changes' : params.goalContributionId ? 'Post transfer and clear reservation' : kind === 'subscription' ? 'Save subscription' : 'Save transaction'} variant="primary" fullWidth onPress={() => void submit()} />
@@ -144,8 +151,8 @@ export default function Transactions() {
     </>}
     {!formOpen ? <>
       <Text style={{ fontWeight: '600', fontSize: 17 }}>Activity</Text>
-      {!filtered.length ? <Text>{search ? 'No transactions match your search.' : 'Transactions will appear here.'}</Text> : null}
-      {filtered.map(tx => <RecordLine key={tx.id} title={tx.description} detail={`${formatDateDisplay(tx.type === 'subscription' ? tx.nextDueDate ?? tx.date : tx.date)} · ${tx.type === 'subscription' ? `${tx.subscriptionFrequency ?? 'repeat'} subscription` : tx.type} · ${formatMoney(tx.amountCents)}${tx.accountId ? ` · ${data.accounts.find(a => a.id === tx.accountId)?.name ?? 'Missing account'}` : ''}${tx.toAccountId ? ` → ${data.accounts.find(a => a.id === tx.toAccountId)?.name ?? 'Missing account'}` : ''}`} onEdit={() => { fill(tx); crud.setEditingId(tx.id); }} onDelete={() => crud.confirmDelete(tx.id)} />)}
+      {!filtered.length ? <EmptyState message={search ? 'No matching transactions.' : 'Your activity starts here.'} /> : null}
+      {filtered.map(tx => <RecordLine key={tx.id} icon={tx.type === 'transfer' ? 'move' : 'transaction'} title={tx.description} amount={`${tx.type === 'expense' ? '−' : tx.type === 'income' ? '+' : ''}${formatMoney(tx.amountCents)}`} detail={`${formatDateDisplay(tx.type === 'subscription' ? tx.nextDueDate ?? tx.date : tx.date)} · ${tx.type}${tx.categoryId ? ` · ${data.categories.find(c => c.id === tx.categoryId)?.name ?? ''}` : ''}${tx.accountId ? ` · ${data.accounts.find(a => a.id === tx.accountId)?.name ?? 'Account'}` : ''}`} onView={() => { fill(tx); crud.setEditingId(tx.id); }} onEdit={() => { fill(tx); crud.setEditingId(tx.id); }} onDelete={() => crud.confirmDelete(tx.id)} />)}
     </> : null}
   </TourHighlight></Page>;
 }

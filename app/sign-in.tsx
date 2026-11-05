@@ -1,5 +1,6 @@
+import { Text } from '../src/components/typography';
 import React, { useEffect, useState } from 'react';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
 import { Redirect, usePathname, useRouter } from 'expo-router';
 import { Action, Feedback, Field, Page } from '../src/components/ui';
 import { cloudConfigurationHelp } from '../src/backend/supabase';
@@ -48,7 +49,7 @@ export default function SignIn() {
   };
 
   return <Page title={registering ? 'Create account' : 'Sign in'} showTabs={false}><Feedback />
-    <Text>Make every paycheck count.</Text>
+    <Text role="message" style={{ fontSize: 24 }}>Make every paycheck count.</Text>
     {authLoading ? <Text>Checking sign-in…</Text> : null}
     {!authConfigured ? <View style={{ gap: 8 }}>
       <Text>Cloud sign-in and cross-device sync need backend setup. Scuttle currently runs in local device mode.</Text>

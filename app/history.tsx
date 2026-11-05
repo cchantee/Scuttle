@@ -1,5 +1,6 @@
+import { Text } from '../src/components/typography';
 import React, { useMemo, useState } from 'react';
-import { Text } from 'react-native';
+
 import { Link } from 'expo-router';
 import { Action, DateField, Feedback, Page } from '../src/components/ui';
 import { formatMoney } from '../src/domain/money';

@@ -2,7 +2,8 @@ import { AppData, BudgetAllocation, SavingsGoal, SubscriptionFrequency, Transact
 import { normalizeDateInput } from './date';
 
 export const allocatedForPaycheck = (data: AppData, paycheckId: string) =>
-  data.allocations.filter(x => x.paycheckId === paycheckId).reduce((sum, x) => sum + x.amountCents, 0);
+  data.allocations.filter(x => x.paycheckId === paycheckId).reduce((sum, x) => sum + x.amountCents, 0) +
+  data.contributions.filter(x => x.paycheckId === paycheckId).reduce((sum, x) => sum + x.amountCents, 0);
 export const unallocatedForPaycheck = (data: AppData, paycheckId: string) =>
   (data.paychecks.find(x => x.id === paycheckId)?.amountCents ?? 0) - allocatedForPaycheck(data, paycheckId);
 export const spentForPaycheck = (data: AppData, paycheckId: string) => {
@@ -18,7 +19,7 @@ export const allocationSummary = (data: AppData, allocation: BudgetAllocation) =
 };
 /** All allocations belonging to paychecks whose budgets have not been archived. */
 export const activeBudgetAllocations = (data: AppData) => {
-  const activePaycheckIds = new Set(data.paychecks.filter(paycheck => !paycheck.budgetArchived).map(paycheck => paycheck.id));
+  const activePaycheckIds = new Set(data.paychecks.filter(paycheck => !paycheck.budgetArchived && paycheck.status !== 'planned').map(paycheck => paycheck.id));
   return data.allocations.filter(allocation => activePaycheckIds.has(allocation.paycheckId));
 };
 export const goalSaved = (data: AppData, goalId: string) => {
@@ -108,6 +109,8 @@ function accountEffect(tx: Transaction, account: VirtualAccount): number {
 }
 
 export function validateTransaction(data: AppData, tx: Transaction): string | null {
+  if (tx.allocationId && data.paychecks.find(p => p.id === data.allocations.find(a => a.id === tx.allocationId)?.paycheckId)?.status === 'planned') return 'Receive this paycheck before recording expenses against its plan.';
+
   if (!tx.description.trim()) return 'Enter a description.';
   if (!Number.isSafeInteger(tx.amountCents) || tx.amountCents <= 0) return 'Amount must be greater than zero.';
   if (!validDate(tx.date)) return 'Enter a valid transaction date in YYYY-MM-DD format.';
@@ -116,6 +119,7 @@ export function validateTransaction(data: AppData, tx: Transaction): string | nu
     if (tx.subscriptionFrequency === 'custom' && (!Number.isInteger(tx.subscriptionIntervalDays) || (tx.subscriptionIntervalDays ?? 0) < 1 || (tx.subscriptionIntervalDays ?? 0) > 365)) return 'Choose a subscription interval from 1 to 365 days.';
   }
   if (tx.categoryId && !data.categories.some(x => x.id === tx.categoryId)) return 'Selected category does not exist.';
+  if (tx.paycheckId && data.paychecks.find(p => p.id === tx.paycheckId)?.status === 'planned') return 'Receive this paycheck before moving its funds.';
   if (tx.paycheckId && (tx.type !== 'transfer' || !data.paychecks.some(x => x.id === tx.paycheckId))) return 'The linked paycheck is invalid for this transaction.';
   if (tx.allocationId && tx.type !== 'expense') return 'Only expenses can be linked to a budget allocation.';
   if (tx.allocationId && !data.allocations.some(x => x.id === tx.allocationId)) return 'Selected allocation does not exist.';

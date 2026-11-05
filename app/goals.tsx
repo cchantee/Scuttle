@@ -1,5 +1,8 @@
+import { Card } from '../src/components/ui';
+import { EmptyState } from '../src/components/coastal';
+import { Text } from '../src/components/typography';
 import React, { useState } from 'react';
-import { Text } from 'react-native';
+
 import { usePathname, useRouter } from 'expo-router';
 import { Action, DateField, Field, Feedback, Page, RecordLine } from '../src/components/ui';
 import { useCrud } from '../src/components/hooks';
@@ -31,6 +34,7 @@ export default function Goals() {
   };
 
   return <Page title={pathname === '/goal/new' ? 'Create goal' : 'Goals'}><Feedback />
+    {!formOpen && data.goals.length ? <Card><Text>Total Saved</Text><Text role="money" style={{ fontSize: 32 }}>{formatMoney(data.goals.reduce((sum, goal) => sum + goalSummary(data, goal).savedCents, 0))}</Text></Card> : null}
     {!formOpen ? <Action label="+ Create goal" variant="primary" fullWidth onPress={() => router.push('/goal/new')} /> : <>
       <Field label="Goal name" value={name} onChangeText={setName} />
       <Field label="Target amount" value={target} onChangeText={setTarget} keyboardType="decimal-pad" />
@@ -39,11 +43,11 @@ export default function Goals() {
       <Action label="Save goal" variant="primary" fullWidth onPress={() => void save()} />
       <Action label="Cancel" onPress={reset} />
     </>}
-    {!data.goals.length ? <Text>Goals can collect contributions across multiple paychecks.</Text> : null}
-    {data.goals.map(goal => {
+    {!data.goals.length ? <EmptyState message="Save for what matters." /> : null}
+    {!formOpen ? data.goals.map(goal => {
       const summary = goalSummary(data, goal);
       const pending = pendingForGoal(data, goal.id);
-      return <RecordLine key={goal.id} title={goal.name} detail={`${formatMoney(summary.savedCents)} saved / ${formatMoney(goal.targetCents)} · ${formatMoney(summary.remainingCents)} to go${pending ? ` · ${formatMoney(pending)} pending` : ''}${goal.targetDate ? ` · Target ${formatDateInput(goal.targetDate)}` : ''}`} progress={{ value: summary.savedCents, max: goal.targetCents, label: `${summary.progressPercent.toFixed(0)}%` }} onView={() => router.push({ pathname: '/goal/[id]', params: { id: goal.id } })} onEdit={() => { setName(goal.name); setTarget((goal.targetCents / 100).toFixed(2)); setInitial((goal.initialSavedCents / 100).toFixed(2)); setTargetDate(goal.targetDate ? formatDateInput(goal.targetDate) : ''); crud.setEditingId(goal.id); setFormOpen(true); }} onDelete={() => crud.confirmDelete(goal.id)} />;
-    })}
+      return <RecordLine icon="goals" key={goal.id} title={goal.name} detail={`${formatMoney(summary.savedCents)} saved / ${formatMoney(goal.targetCents)} · ${formatMoney(summary.remainingCents)} to go${pending ? ` · ${formatMoney(pending)} pending` : ''}${goal.targetDate ? ` · Target ${formatDateInput(goal.targetDate)}` : ''}`} progress={{ value: summary.savedCents, max: goal.targetCents, label: `${summary.progressPercent.toFixed(0)}%` }} onView={() => router.push({ pathname: '/goal/[id]', params: { id: goal.id } })} onEdit={() => { setName(goal.name); setTarget((goal.targetCents / 100).toFixed(2)); setInitial((goal.initialSavedCents / 100).toFixed(2)); setTargetDate(goal.targetDate ? formatDateInput(goal.targetDate) : ''); crud.setEditingId(goal.id); setFormOpen(true); }} onDelete={() => crud.confirmDelete(goal.id)} />;
+    }) : null}
   </Page>;
 }

@@ -1,7 +1,12 @@
+import { View } from 'react-native';
+import { IconTile } from '../src/components/icons';
+import { colors } from '../src/design/theme';
+import { Text } from '../src/components/typography';
 import React, { useEffect, useRef, useState } from 'react';
-import { Text } from 'react-native';
+
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Action, Field, Feedback, Page, RecordLine, SelectId } from '../src/components/ui';
+import { TourHighlight } from '../src/components/walkthrough';
+import { Card, ProgressBar, SectionTitle, Action, Field, Feedback, Page, RecordLine, SelectId } from '../src/components/ui';
 import { useCrud } from '../src/components/hooks';
 import { formatMoney, parseMoney } from '../src/domain/money';
 import { allocationSummary, allocatedForPaycheck, nextSubscriptionDue, unallocatedForPaycheck } from '../src/domain/calculations';
@@ -51,19 +56,47 @@ export default function Budget() {
   const allocationSave = async () => {
     try {
       if (!paycheckId || !categoryId) return reportError('Choose a paycheck and category.');
-      const ok = await allocationCrud.submit({ paycheckId, categoryId, amountCents: parseMoney(amount) });
-      if (ok) clearAllocation();
+      const cents = parseMoney(amount);
+      const existing = data.allocations.find(a => a.id === allocationCrud.editingId);
+      if (cents > (existing?.amountCents ?? 0) && cents > unallocatedForPaycheck(data, paycheckId) + (existing?.amountCents ?? 0)) return reportError('This amount is more than the paycheck left to assign.');
+      const ok = await allocationCrud.submit({ paycheckId, categoryId, amountCents: cents });
+      if (ok) {
+        const savedPaycheck = paycheckId;
+        clearAllocation();
+        if (params.paycheckId || params.allocationId) router.replace({ pathname: '/paycheck/[id]', params: { id: savedPaycheck } });
+      }
     } catch (e) { reportError(e instanceof Error ? e.message : 'Invalid allocation.'); }
   };
 
-  return <Page title="Budget"><Feedback />
+  if ((params.paycheckId || params.allocationId) && paycheckId) {
+    const paycheck = data.paychecks.find(p => p.id === paycheckId);
+    const previous = data.allocations.find(a => a.id === allocationCrud.editingId)?.amountCents ?? 0;
+    let draft = 0;
+    try { draft = amount.trim() ? parseMoney(amount) : 0; } catch { /* Input validation runs on save. */ }
+    const remaining = unallocatedForPaycheck(data, paycheckId) + previous - draft;
+    return <Page title={allocationCrud.editingId ? 'Edit Allocation' : 'Add Allocation'}><Feedback />
+      <Card><Text>Left to Assign</Text><Text role="money" style={{ fontSize: 32 }}>{formatMoney(remaining)}</Text><Text style={{ color: '#69777A', fontSize: 14 }}>From {paycheck?.source || 'this paycheck'} · {paycheck ? formatDateDisplay(paycheck.receivedAt) : ''}</Text></Card>
+      <SelectId label="Category" choices={data.categories.map(c => ({ id: c.id, title: c.name }))} value={categoryId} onChange={setCategory} create="category" />
+      <Field label="Allocated amount" value={amount} onChangeText={setAmount} keyboardType="decimal-pad" placeholder="0.00" />
+      <Action label="Save allocation" variant="primary" fullWidth onPress={() => void allocationSave()} />
+      <Action label="Cancel" onPress={() => router.replace({ pathname: '/paycheck/[id]', params: { id: paycheckId } })} />
+    </Page>;
+  }
+
+  return <Page title="Budget"><TourHighlight id="budget-main"><Feedback />
     <Text>Categories and allocations are tracked separately for each paycheck.</Text>
-    <Text style={{ fontWeight: '600', fontSize: 17 }}>Upcoming subscriptions</Text>
-    <Text>Budget for these scheduled charges before they are due.</Text>
+    <Card style={{ borderTopWidth: 4, borderTopColor: colors.blue, gap: 16 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+        <IconTile name="calendar" tint={colors.glass} />
+        <Text accessibilityRole="header" style={{ flex: 1, fontSize: 23 }}>Upcoming subscriptions</Text>
+        {upcomingSubscriptions.length ? <View style={{ backgroundColor: colors.mist, minWidth: 30, minHeight: 30, borderRadius: 8, paddingHorizontal: 8, alignItems: 'center', justifyContent: 'center' }}><Text accessibilityLabel={`${upcomingSubscriptions.length} upcoming subscriptions`} style={{ fontSize: 15 }}>{upcomingSubscriptions.length}</Text></View> : null}
+      </View>
+      <View style={{ backgroundColor: colors.glass, borderRadius: 8, padding: 12 }}><Text style={{ fontSize: 16, lineHeight: 23 }}>Budget for these scheduled charges before they are due.</Text></View>
     {!upcomingSubscriptions.length ? <Text>No upcoming subscription charges before your next payday.</Text> : upcomingSubscriptions.map(({ item, dueDate }) => {
       const planned = !!planPaycheck && data.allocations.some(allocation => allocation.subscriptionId === item.id && allocation.paycheckId === planPaycheck.id);
       return <React.Fragment key={item.id}><RecordLine title={item.description} detail={`${formatMoney(item.amountCents)} · Due ${formatDateDisplay(dueDate)}${item.categoryId ? ` · ${data.categories.find(category => category.id === item.categoryId)?.name ?? 'Category'}` : ''}${item.accountId ? ` · ${data.accounts.find(account => account.id === item.accountId)?.name ?? 'Account'}` : ''}`} onEdit={() => router.push({ pathname: '/transactions', params: { editId: item.id } })} onDelete={() => router.push({ pathname: '/transactions', params: { editId: item.id } })} />{planned ? <Text>Included in paycheck plan · {formatDateDisplay(planPaycheck!.receivedAt)}</Text> : <Action label="Add to paycheck plan" onPress={() => void planSubscription(item.id)} />}</React.Fragment>;
     })}
+    </Card>
     {!categoryFormOpen ? <Action label="+ Add category" variant="primary" fullWidth onPress={() => setCategoryFormOpen(true)} /> : <>
       <Field label={categoryCrud.editingId ? 'Category name' : 'New category name'} value={name} onChangeText={setName} />
       <Action label="Save category" variant="primary" fullWidth onPress={() => void categorySave()} />
@@ -95,7 +128,7 @@ export default function Budget() {
       <Action label="Restore paycheck budget" onPress={() => { void saveRecord('paychecks', { ...paycheck, budgetArchived: false }); }} />
       {data.allocations.filter(item => item.paycheckId === paycheck.id).map(allocation => <AllocationLine key={allocation.id} allocation={allocation} data={data} router={router} onEdit={() => { setPaycheck(allocation.paycheckId); setCategory(allocation.categoryId); setAmount((allocation.amountCents / 100).toFixed(2)); allocationCrud.setEditingId(allocation.id); setAllocationFormOpen(true); }} onDelete={() => allocationCrud.confirmDelete(allocation.id)} />)}
     </React.Fragment>)}
-  </Page>;
+  </TourHighlight></Page>;
 }
 
 function AllocationLine({ allocation, data, router, onEdit, onDelete }: { allocation: (typeof data.allocations)[number]; data: ReturnType<typeof useData>['data']; router: ReturnType<typeof useRouter>; onEdit: () => void; onDelete: () => void }) {
