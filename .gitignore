@@ -2,6 +2,7 @@ node_modules/
 .env
 .env.*
 !.env.example
+study.secrets.local
 .expo/
 /ios/
 /android/
