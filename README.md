@@ -11,7 +11,7 @@ Scuttle is a paycheck-based budgeting application built with Expo, React Native,
 
 To open the web version, run `npx expo start --web`.
 
-To populate the app with connected example accounts, paychecks, budgets, transactions, and savings goals, open **More → Sample data → Load sample data**. The loader adds records to the current device or signed-in cloud profile without replacing existing records, and it only loads once per profile. Use **Delete all sample data** in the same section to remove the example records; removal is blocked if a regular record depends on a sample record.
+Jordan Taylor is the only study/sample dataset. The researcher restores the complete baseline using `npm run study:jordan -- reset` (interactive confirmation required), then checks database readiness with `npm run study:jordan -- verify-live`. See [study reset instructions](docs/jordan-study-account.md). Participants use Jordan's existing login; the mobile app has no sample loader or reset control.
 
 This project uses Expo SDK 58 and matches the SDK 58 Expo Go installed on your phone. Without backend credentials it saves data on the current device only. To enable registration, sign-in, and cross-device sync:
 
@@ -65,7 +65,7 @@ Other scripts: `npm test`, `npm run typecheck`, and `npm run qa:backend` (runs b
 - Goal contributions can reserve account funds, be completed in place, or settle via an explicitly recorded transfer. Budget-group allocations designate funds without moving account money.
 - The `AI_Designed_App` branch implements Scuttle Brand v1.1 across the working application. iOS/Android/web JavaScript bundles export successfully; physical-device and native binary verification remain manual. See [AI-only design decisions and verification](AI-design-decisions.md).
 - Date entry accepts `M/D/YYYY` with one or two digits for month/day and includes an in-app calendar picker; saved dates stay normalized as `YYYY-MM-DD`.
-- Sample data can be loaded and removed from More. Removal preserves dependency checks.
+- Jordan is the only supported study dataset; the researcher-only reset restores its complete baseline.
 
 ## Current verification status
 
@@ -73,12 +73,14 @@ SDK 58 dependency validation and TypeScript checking pass. Expo exported web, iO
 
 ## Scuttle Brand v1.1
 
-On `AI_Designed_App`, the branded interface uses **Home · Budget · Add · Activity · More**. Add opens Expense, Income, Transfer, or Paycheck entry; More keeps Accounts, Savings Goals, Paychecks, Profile, sample data, and existing tools reachable. Planned/received paychecks and category-to-goal contributions remain fully functional.
+On `AI_Designed_App`, the branded interface uses **Home · Budget · Add · Activity · More**. Add opens Expense, Income, Transfer, or Paycheck entry; More keeps Accounts, Savings Goals, Paychecks, Profile and existing tools reachable. Planned/received paychecks and category-to-goal contributions remain fully functional.
 
 The package is extracted under `assets/Scuttle_Brand_v1_1/`. Design decisions, ten-screen route mapping, browser scenarios, verification results, and known limits are in [AI-design-decisions.md](AI-design-decisions.md). Financial operations, storage, backend configuration, and migrations are unchanged by the brand update.
 
-## UX refinement on AI_Designed_App_2
+## Consolidated AI interface: AI_Designed_App
 
 Add a paycheck, then use **Save paycheck & budget** to enter its category and goal amounts together. The planner keeps a live **Left to budget** total and saves one complete distribution. **Mark as received** supports reviewing actual pay and adjusting that distribution in the same atomic save. Category budget remaining, unassigned pay, and recorded account balances stay distinct.
 
 Budget now separates **Spending**, **Planned**, and **Archived**. Activity offers **Money activity** or **All records**. Record rows open directly; their **⋯** menus expose edit/delete. See [the independent UX evaluation and verification log](AI-design-decisions.md#ux-refinement) for decisions, financial safeguards, browser scenarios, and remaining manual checks.
+
+The former `AI_Designed_App_2` continuation is consolidated into `AI_Designed_App`, including its full commit history and the finalized Jordan study fixture, protected reset, and walkthrough fixes. Use `AI_Designed_App` for the AI-only study condition.

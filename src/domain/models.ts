@@ -6,6 +6,8 @@ export interface InterestRateChange { effectiveDate: string; ratePercent: number
 
 export type PaydayFrequency = 'monthly' | 'weekly' | 'biweekly' | 'custom';
 export interface User {
+  /** Only resettable study snapshots pin the scenario clock. */
+  studySnapshotDate?: string;
   id: Id; displayName: string; nextPayday?: string; paydayFrequency?: PaydayFrequency; paydayIntervalDays?: number;
 }
 /** A paycheck can be kept standalone or linked directly as income to a virtual account. */

@@ -8,7 +8,7 @@ Updated November 2, 2026. Consolidated record of the financial foundation, initi
 | --- | --- | --- |
 | Financial foundation | `CoreChanges` | Planned/received paychecks, preserved allocation breakdowns, and category-to-goal reallocation. |
 | Brand v1.1 | `AI_Designed_App` | Working branded application based on the supplied implementation prompt and HTML references; shared components, mascot, navigation, and accessible financial presentation. |
-| Independent UX refinement | `AI_Designed_App_2` | Faster paycheck budgeting, combined receipt review, simpler screens, stronger draft protection, and additional financial regression tests. |
+| Independent UX refinement (consolidated) | `AI_Designed_App` | Faster paycheck budgeting, combined receipt review, simpler screens, stronger draft protection, and additional financial regression tests. |
 
 The initial design retained the current functional application because `main` contained only the initial repository commit. No work was merged into `main`. The second iteration deliberately revisited earlier decisions rather than treating the wireframes as final.
 

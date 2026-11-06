@@ -9,7 +9,7 @@ const ink = colors.text;
 const muted = colors.muted;
 export const walkthroughSteps = [
   { route: '/', target: 'home-quick-views', title: 'Two different balances', body: 'Your category budget is what you planned to spend. Account balances reflect money you recorded in your accounts.', placement: 'bottom' },
-  { route: '/', target: 'nav-add', title: 'One place to add activity', body: 'Add a paycheck, log spending or income, or record a transfer. Transfers are not expenses.', placement: 'top' },
+  { route: '/', target: 'nav-add', title: 'One place to add activity', body: 'Add a paycheck, log spending or income, or record a transfer. Transfers are not expenses. Select Next to continue without adding anything.', placement: 'top' },
   { route: '/paychecks', target: 'paychecks-main', title: 'Budget a paycheck in one pass', body: 'Add your pay, enter category and goal amounts together, and save one plan. Planned pay stays separate until you receive it.', placement: 'bottom' },
   { route: '/budget', target: 'nav-budget', title: 'Check spending at a glance', body: 'Review remaining category money. Planned and archived budgets have their own tabs.', placement: 'bottom' },
   { route: '/more', target: 'more-main', title: 'Accounts, goals, and settings', body: 'Open account balances, savings goals, and other tools here. You can replay this short tour at any time.', placement: 'bottom' },
@@ -45,11 +45,12 @@ export function TourHighlight({ id, children }: React.PropsWithChildren<{ id: st
   return <View style={highlighted ? { borderWidth: 3, borderColor: colors.teal, borderRadius: 14, padding: 5, backgroundColor: colors.surface, zIndex: 2, elevation: 8 } : { gap: 16 }}>{children}</View>;
 }
 
-export function WalkthroughOverlay() {
+export function WalkthroughOverlay({ insideAddMenu = false }: { insideAddMenu?: boolean }) {
   const tour = useWalkthrough();
   const { reportError } = useData();
   if (!tour?.active) return null;
   const step = walkthroughSteps[tour.index];
+  if ((step.target === 'nav-add') !== insideAddMenu) return null;
   const isLast = tour.index === walkthroughSteps.length - 1;
   return <View pointerEvents="box-none" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: step.placement === 'top' ? 'flex-start' : 'flex-end', paddingHorizontal: 14, paddingTop: step.placement === 'top' ? 56 : 0, paddingBottom: step.placement === 'bottom' ? 94 : 0 }}>
     <View accessibilityRole="summary" style={{ padding: 15, gap: 9, borderWidth: 2, borderColor: ink, borderRadius: 12, backgroundColor: colors.surface, shadowColor: colors.text, shadowOpacity: 0.22, shadowRadius: 8, elevation: 12 }}>

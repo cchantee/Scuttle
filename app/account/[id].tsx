@@ -24,8 +24,8 @@ export default function AccountDetail() {
   const pendingContributions = data.contributions.filter(item => item.accountId === account.id && item.status === 'pending');
   const available = availableAccountBalance(data, account);
   const earnsInterest = account.type === 'savings' || account.type === 'high_yield_savings' || account.type === 'credit_card';
-  const accruedInterest = earnsInterest ? accruedInterestCents(data, account, todayISODate()) : 0;
-  const postingPreview = earnsInterest ? nextInterestPostingPreview(data, account, todayISODate()) : null;
+  const accruedInterest = earnsInterest ? accruedInterestCents(data, account, todayISODate(data.user)) : 0;
+  const postingPreview = earnsInterest ? nextInterestPostingPreview(data, account, todayISODate(data.user)) : null;
   const creditedInterest = transactions.filter(item => !!item.interestPosting).reduce((sum, item) => sum + item.amountCents, 0);
   return <Page title={account.name}><Feedback />
     <Hero label={account.type === 'credit_card' ? 'Credit card debt owed' : 'Actual account balance'} amount={formatMoney(accountBalance(data, account))} detail="Based on your recorded activity" />

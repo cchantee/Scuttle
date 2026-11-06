@@ -42,7 +42,7 @@ export function upsertRecord<C extends CollectionName>(data: AppData, collection
     const supplied = record as VirtualAccount;
     const previous = data.accounts.find(item => item.id === supplied.id);
     const rate = supplied.interestRatePercent ?? 0;
-    const today = todayISODate();
+    const today = todayISODate(data.user);
     const interestStartDate = previous?.interestStartDate ?? supplied.interestStartDate ?? today;
     let history = previous?.interestRateHistory ?? supplied.interestRateHistory ?? [{ effectiveDate: interestStartDate, ratePercent: previous?.interestRatePercent ?? rate }];
     const previousRate = previous?.interestRatePercent ?? 0;
@@ -138,7 +138,7 @@ export function upsertRecord<C extends CollectionName>(data: AppData, collection
   }
   if (collection === 'allocations' || collection === 'contributions') {
     const entry = record as BudgetAllocation & SavingsContribution;
-    if (entry.paycheckId) updated.paychecks = updated.paychecks.map(p => p.id === entry.paycheckId ? { ...p, allocationHistory: [...(p.allocationHistory ?? []), { id: newId(), date: todayISODate(), description: `${index < 0 ? 'Added' : 'Edited'} ${collection === 'allocations' ? 'category' : 'goal'} allocation: ${entry.amountCents / 100}` }] } : p);
+    if (entry.paycheckId) updated.paychecks = updated.paychecks.map(p => p.id === entry.paycheckId ? { ...p, allocationHistory: [...(p.allocationHistory ?? []), { id: newId(), date: todayISODate(data.user), description: `${index < 0 ? 'Added' : 'Edited'} ${collection === 'allocations' ? 'category' : 'goal'} allocation: ${entry.amountCents / 100}` }] } : p);
   }
   return { data: updated };
 }
@@ -171,7 +171,7 @@ export function removeRecord(data: AppData, collection: CollectionName, id: Id):
   }
   if (collection === 'allocations' || collection === 'contributions') {
     const removed = (data[collection] as Array<BudgetAllocation | SavingsContribution>).find(item => item.id === id);
-    if (removed?.paycheckId) updated.paychecks = updated.paychecks.map(p => p.id === removed.paycheckId ? { ...p, allocationHistory: [...(p.allocationHistory ?? []), { id: newId(), date: todayISODate(), description: `Removed ${collection === 'allocations' ? 'category' : 'goal'} allocation: ${removed.amountCents / 100}` }] } : p);
+    if (removed?.paycheckId) updated.paychecks = updated.paychecks.map(p => p.id === removed.paycheckId ? { ...p, allocationHistory: [...(p.allocationHistory ?? []), { id: newId(), date: todayISODate(data.user), description: `Removed ${collection === 'allocations' ? 'category' : 'goal'} allocation: ${removed.amountCents / 100}` }] } : p);
   }
   return { data: updated } as StoreResult;
 }

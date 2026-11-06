@@ -23,7 +23,7 @@ export default function Paychecks() {
   const busy = useRef(false);
   const [open, setOpen] = useState(params.add === '1');
   const [amount, setAmount] = useState('');
-  const [date, setDate] = useState(todayDateInput());
+  const [date, setDate] = useState(todayDateInput(data.user));
   const [source, setSource] = useState('');
   const [notes, setNotes] = useState('');
   const [status, setStatus] = useState<'received' | 'planned'>('received');
@@ -35,7 +35,7 @@ export default function Paychecks() {
   const fill = (p: Paycheck) => { setEditingId(p.id); setAmount((p.amountCents / 100).toFixed(2)); setDate(formatDateInput(p.receivedAt)); setSource(p.source || ''); setNotes(p.notes || ''); setStatus(p.status === 'planned' ? 'planned' : 'received'); setAccountId(p.remainingAccountId || p.accountId || ''); setMessage(''); setOpen(true); };
   useEffect(() => { if (params.add === '1' && !params.paycheckId) { reset(); setOpen(true); } }, [params.add]);
   useEffect(() => { const p = data.paychecks.find(p => p.id === params.paycheckId); if (p && initialized.current !== p.id) { initialized.current = p.id; fill(p); } }, [data.paychecks, params.paycheckId]);
-  const reset = () => { setOpen(false); setEditingId(''); setAmount(''); setDate(todayDateInput()); setSource(''); setNotes(''); setStatus('received'); setAccountId(''); setMessage(''); id.current = newId(); };
+  const reset = () => { setOpen(false); setEditingId(''); setAmount(''); setDate(todayDateInput(data.user)); setSource(''); setNotes(''); setStatus('received'); setAccountId(''); setMessage(''); id.current = newId(); };
   const save = async () => {
     if (busy.current) return;
     busy.current = true; setMessage('');

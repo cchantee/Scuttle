@@ -55,6 +55,6 @@ export function savePaycheckPlan(data: AppData, op: SavePlanOperation): StoreRes
     if (result.error) return fail(result.error);
   }
   return { data: { ...candidate, paychecks: candidate.paychecks.map(row => row.id === p.id ? { ...row,
-    allocationHistory: [...(row.allocationHistory ?? []), { id: op.id, date: todayISODate(), description: `Saved paycheck plan: ${allocatedForPaycheck(candidate, p.id) / 100} assigned across categories and goals. Account balances unchanged by allocation edits.` }],
+    allocationHistory: [...(row.allocationHistory ?? []), { id: op.id, date: todayISODate(data.user), description: `Saved paycheck plan: ${allocatedForPaycheck(candidate, p.id) / 100} assigned across categories and goals. Account balances unchanged by allocation edits.` }],
   } : row) } };
 }

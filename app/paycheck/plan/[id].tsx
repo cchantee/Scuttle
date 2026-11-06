@@ -36,7 +36,7 @@ function PlanEditor({ initialData, paycheck, receiving }: { initialData: AppData
   const [goals, setGoals] = useState<GoalDraft[]>(() => initialData.contributions.filter(c => c.paycheckId === paycheck.id).map(record => ({ record, amount: (record.amountCents / 100).toFixed(2), existing: true })));
   const [actual, setActual] = useState((paycheck.amountCents / 100).toFixed(2));
   const [account, setAccount] = useState('');
-  const [date, setDate] = useState(todayDateInput());
+  const [date, setDate] = useState(todayDateInput(data.user));
   const [dirty, setDirty] = useState(false);
   const [message, setMessage] = useState('');
   const [saving, setSaving] = useState(false);
@@ -90,7 +90,7 @@ function PlanEditor({ initialData, paycheck, receiving }: { initialData: AppData
     <SelectId label="Add a category" choices={data.categories.filter(c => !categories.some(row => row.record.categoryId === c.id)).map(c => ({ id: c.id, title: c.name }))} value="" onChange={id => { if (!id) return; setCategories(rows => rows.some(r => r.record.categoryId === id) ? rows : [...rows, { record: { id: newId(), paycheckId: paycheck.id, categoryId: id, amountCents: 0 }, amount: '', existing: false }]); change(); }} create="category" />
     <SectionTitle>Savings goals</SectionTitle>
     {goals.map(row => <View key={row.record.id} style={{ gap: 8, paddingVertical: 4 }}><Field label={`${data.goals.find(g => g.id === row.record.goalId)?.name || 'Missing goal'} ($)`} value={row.amount} onChangeText={v => { setGoals(rows => rows.map(r => r.record.id === row.record.id ? { ...r, amount: v } : r)); change(); }} keyboardType="decimal-pad" placeholder="0.00" error={cents(row.amount) === null ? 'Enter a valid amount.' : undefined} /></View>)}
-    <SelectId label="Add a savings goal" choices={data.goals.filter(g => !goals.some(row => row.record.goalId === g.id)).map(g => ({ id: g.id, title: g.name }))} value="" onChange={id => { if (!id) return; setGoals(rows => rows.some(r => r.record.goalId === id) ? rows : [...rows, { record: { id: newId(), paycheckId: paycheck.id, goalId: id, amountCents: 0, date: todayISODate(), status: 'allocated' }, amount: '', existing: false }]); change(); }} />
+    <SelectId label="Add a savings goal" choices={data.goals.filter(g => !goals.some(row => row.record.goalId === g.id)).map(g => ({ id: g.id, title: g.name }))} value="" onChange={id => { if (!id) return; setGoals(rows => rows.some(r => r.record.goalId === id) ? rows : [...rows, { record: { id: newId(), paycheckId: paycheck.id, goalId: id, amountCents: 0, date: todayISODate(data.user), status: 'allocated' }, amount: '', existing: false }]); change(); }} />
     {!data.goals.length ? <Text style={{ color: colors.muted, fontSize: 13 }}>No goals yet. You can save this plan now and create a goal from More later.</Text> : null}
     <Text style={{ color: colors.muted, fontSize: 13 }}>Budget edits and goal allocations do not move money between accounts. Set a goal row to zero to return it to unassigned funds.</Text>
     {left !== null && left < 0 ? <Text accessibilityRole="alert" style={{ color: colors.danger }}>Reduce your amounts by {formatMoney(-left)} to fit this paycheck.</Text> : null}

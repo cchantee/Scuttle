@@ -40,7 +40,7 @@ export default function Budget() {
   const spent = active.reduce((sum, a) => sum + allocationSummary(data, a).spentCents, 0);
   const paychecks = newestPaychecks(data.paychecks.filter(p => tab === 'archived' ? p.budgetArchived : tab === 'planned' ? !p.budgetArchived && p.status === 'planned' : !p.budgetArchived && p.status !== 'planned'));
   const planPaycheck = newestPaychecks(data.paychecks.filter(p => !p.budgetArchived))[0];
-  const subscriptions = data.transactions.filter(t => t.type === 'subscription').map(t => ({ t, due: nextSubscriptionDue(t, todayISODate()) })).filter(row => row.due).sort((a, b) => a.due!.localeCompare(b.due!));
+  const subscriptions = data.transactions.filter(t => t.type === 'subscription').map(t => ({ t, due: nextSubscriptionDue(t, todayISODate(data.user)) })).filter(row => row.due).sort((a, b) => a.due!.localeCompare(b.due!));
   const saveAllocation = async () => {
     try { if (!paycheckId || !categoryId) { setMessage('Choose a paycheck and a category.'); return; } if (await allocationCrud.submit({ paycheckId, categoryId, amountCents: parseMoney(amount) })) { setAllocationOpen(false); setMessage(''); } }
     catch { setMessage('Enter a valid dollar amount.'); }

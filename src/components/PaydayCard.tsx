@@ -9,11 +9,11 @@ import { TourHighlight } from './walkthrough';
 export function PaydayCard() {
   const { data, saveNextPayday } = useData();
   const user = data.user;
-  const [date, setDate] = useState(user.nextPayday ? formatDateInput(user.nextPayday) : todayDateInput());
+  const [date, setDate] = useState(user.nextPayday ? formatDateInput(user.nextPayday) : todayDateInput(data.user));
   const [frequency, setFrequency] = useState<PaydayFrequency>(user.paydayFrequency || 'biweekly');
   const [interval, setInterval] = useState(user.paydayIntervalDays?.toString() || '');
   const [message, setMessage] = useState('');
-  const upcoming = user.nextPayday && user.paydayFrequency ? calculateNextPayday(user.nextPayday, todayISODate(), user.paydayFrequency, user.paydayIntervalDays) : user.nextPayday;
+  const upcoming = user.nextPayday && user.paydayFrequency ? calculateNextPayday(user.nextPayday, todayISODate(data.user), user.paydayFrequency, user.paydayIntervalDays) : user.nextPayday;
   const save = async () => {
     const normalized = normalizeDateInput(date);
     if (!normalized) { setMessage('Enter a valid payday date.'); return; }

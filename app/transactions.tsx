@@ -26,7 +26,7 @@ export default function Transactions() {
   const [kind, setKind] = useState<TransactionType>('expense');
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
-  const [date, setDate] = useState(todayDateInput());
+  const [date, setDate] = useState(todayDateInput(data.user));
   const [categoryId, setCategory] = useState('');
   const [allocationId, setAllocation] = useState('');
   const [accountId, setAccount] = useState('');
@@ -35,7 +35,7 @@ export default function Transactions() {
   const [notes, setNotes] = useState('');
   const [subscriptionFrequency, setSubscriptionFrequency] = useState<SubscriptionFrequency>('monthly');
   const [subscriptionInterval, setSubscriptionInterval] = useState('');
-  const [nextDueDate, setNextDueDate] = useState(todayDateInput());
+  const [nextDueDate, setNextDueDate] = useState(todayDateInput(data.user));
   const appliedParams = useRef('');
   const paramKey = `${params.editId ?? ''}|${params.allocationId ?? ''}|${params.accountId ?? ''}|${params.goalContributionId ?? ''}|${params.type ?? ''}|${params.toAccountId ?? ''}`;
 
@@ -55,7 +55,7 @@ export default function Transactions() {
     const contribution = data.contributions.find(item => item.id === params.goalContributionId && item.status === 'pending');
     if (contribution) {
       setKind('transfer'); setDescription(`Goal contribution · ${data.goals.find(goal => goal.id === contribution.goalId)?.name ?? 'Savings goal'}`);
-      setAmount((contribution.amountCents / 100).toFixed(2)); setDate(todayDateInput()); setAccount(contribution.accountId ?? '');
+      setAmount((contribution.amountCents / 100).toFixed(2)); setDate(todayDateInput(data.user)); setAccount(contribution.accountId ?? '');
       setCategory(''); setAllocation(''); setFormOpen(true);
     }
     const allocation = data.allocations.find(item => item.id === params.allocationId);
@@ -65,8 +65,8 @@ export default function Transactions() {
   }, [loading, data.transactions, data.contributions, data.goals, data.allocations, data.accounts, params.allocationId, params.accountId, params.editId, params.goalContributionId, paramKey]);
 
   const reset = (close = true) => {
-    setKind('expense'); setDescription(''); setAmount(''); setDate(todayDateInput());
-    setCategory(''); setAllocation(''); setAccount(''); setToAccount(''); setPaycheckId(''); setNotes(''); setSubscriptionFrequency('monthly'); setSubscriptionInterval(''); setNextDueDate(todayDateInput()); crud.cancel();
+    setKind('expense'); setDescription(''); setAmount(''); setDate(todayDateInput(data.user));
+    setCategory(''); setAllocation(''); setAccount(''); setToAccount(''); setPaycheckId(''); setNotes(''); setSubscriptionFrequency('monthly'); setSubscriptionInterval(''); setNextDueDate(todayDateInput(data.user)); crud.cancel();
     if (close) {
       setFormOpen(false);
       if (pathname === '/transaction/new') router.replace('/transactions');

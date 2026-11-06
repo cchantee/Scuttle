@@ -19,7 +19,7 @@ export default function GoalDetail() {
   const { data, reportError, paycheckOperation, completeGoalContributionInAccount } = useData();
   const [formOpen, setFormOpen] = useState(false);
   const [amount, setAmount] = useState('');
-  const [date, setDate] = useState(todayDateInput());
+  const [date, setDate] = useState(todayDateInput(data.user));
   const [note, setNote] = useState('');
   const [accountId, setAccountId] = useState('');
   const [fundingMode, setFundingMode] = useState('account');
@@ -33,7 +33,7 @@ export default function GoalDetail() {
   if (!goal) return <Page title="Savings goal"><Text>Goal not found.</Text><Link href="/goals">Back to goals</Link></Page>;
   const summary = goalSummary(data, goal);
   const contributions = data.contributions.filter(item => item.goalId === goal.id).sort((a, b) => b.date.localeCompare(a.date));
-  const reset = () => { setAmount(''); setDate(todayDateInput()); setNote(''); setAccountId(''); setFundingMode('account'); setAllocationId(''); crud.cancel(); setFormOpen(false); };
+  const reset = () => { setAmount(''); setDate(todayDateInput(data.user)); setNote(''); setAccountId(''); setFundingMode('account'); setAllocationId(''); crud.cancel(); setFormOpen(false); };
   const save = async () => {
     if (saving.current) return;
     saving.current = true;

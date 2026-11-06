@@ -63,7 +63,7 @@ export function applyPaycheckOperation(data: AppData, operation: PaycheckOperati
   if (!!operation.goalId === !!operation.categoryId) return fail('Choose one destination.');
   let next = { ...data, allocations: data.allocations.map(a => a.id === source.id ? { ...a, amountCents: a.amountCents - operation.amountCents } : a) };
   if (operation.goalId) {
-    const c: SavingsContribution = { id: operation.id, paycheckId: p.id, goalId: operation.goalId, amountCents: operation.amountCents, date: todayISODate(), status: 'allocated', note: 'Allocated from paycheck; no account transfer.' };
+    const c: SavingsContribution = { id: operation.id, paycheckId: p.id, goalId: operation.goalId, amountCents: operation.amountCents, date: todayISODate(data.user), status: 'allocated', note: 'Allocated from paycheck; no account transfer.' };
     if (data.contributions.some(c => c.id === operation.id)) return fail('Operation identifier is already in use.');
     const result = upsertRecord(next, 'contributions', c);
     if (result.error) return fail(result.error);
@@ -75,5 +75,5 @@ export function applyPaycheckOperation(data: AppData, operation: PaycheckOperati
     if (result.error) return fail(result.error);
     next = result.data;
   }
-  return { data: { ...next, paychecks: next.paychecks.map(item => item.id === p.id ? { ...item, allocationHistory: [...(item.allocationHistory ?? []), { id: operation.id, date: todayISODate(), description: `${operation.amountCents / 100} from ${data.categories.find(c => c.id === source.categoryId)?.name} to ${data.goals.find(g => g.id === operation.goalId)?.name ?? data.categories.find(c => c.id === operation.categoryId)?.name}` }] } : item) } };
+  return { data: { ...next, paychecks: next.paychecks.map(item => item.id === p.id ? { ...item, allocationHistory: [...(item.allocationHistory ?? []), { id: operation.id, date: todayISODate(data.user), description: `${operation.amountCents / 100} from ${data.categories.find(c => c.id === source.categoryId)?.name} to ${data.goals.find(g => g.id === operation.goalId)?.name ?? data.categories.find(c => c.id === operation.categoryId)?.name}` }] } : item) } };
 }
