@@ -93,6 +93,7 @@ export function buildJordanTaylorSnapshot(userId: string): AppData {
       { id: checking, name: 'Capital One 360 Checking', type: 'checking', initialBalanceCents: 18000, interestRatePercent: 0, interestStartDate: '2026-09-06', interestRateHistory: [{ effectiveDate: '2026-09-06', ratePercent: 0 }], notes: 'Opening balance on 2026-09-06' },
       { id: savings, name: 'Capital One 360 Performance Savings', type: 'high_yield_savings', initialBalanceCents: 50000, interestRatePercent: 3.5,
         interestStartDate: '2026-09-06', interestRateHistory: [{ effectiveDate: '2026-09-06', ratePercent: 3.5 }], notes: 'Opening balance on 2026-09-06; simulated 3.5% APY for fictional study data, not a current bank rate; no historical interest credits supplied' },
+      { id: 'jordan:account:cash', name: 'Cash', type: 'cash', initialBalanceCents: 30000, interestRatePercent: 0, interestStartDate: '2026-09-06', interestRateHistory: [{ effectiveDate: '2026-09-06', ratePercent: 0 }], notes: 'Cash on hand at the study opening; no bank transfer or income entry.' },
     ], categories, paychecks, allocations, transactions: [...expenses, ...gigs, ...transfers, ...reminders],
     goals: [{ id: 'jordan:goal:emergency', name: 'Emergency Fund', targetCents: 100000, initialSavedCents: 0 }],
     contributions: [{ id: 'jordan:reservation:emergency', goalId: 'jordan:goal:emergency', accountId: savings, amountCents: 12000, date: STUDY_DATE, status: 'pending', note: 'Reserved from existing savings; no bank transfer' }],
@@ -150,7 +151,7 @@ export function verifyJordanTaylorStartingData(data: AppData): void {
   require(data.transactions.filter(t => t.type === 'subscription').length === 5, 'recurring reminders');
   require(data.transactions.every(t => !t.interestPosting && !validateTransaction(data, t)), 'invalid transaction or invented interest');
   assertJordanHasNoOverdrafts(data);
-  require(data.accounts.length === 2 && accountBalance(data, data.accounts[0]) === 24500 && accountBalance(data, data.accounts[1]) === 68000, 'account reconciliation');
+  require(data.accounts.length === 3 && accountBalance(data, data.accounts[0]) === 24500 && accountBalance(data, data.accounts[1]) === 68000 && data.accounts[2].name === 'Cash' && data.accounts[2].type === 'cash' && accountBalance(data, data.accounts[2]) === 30000 && availableAccountBalance(data, data.accounts[2]) === 30000, 'account reconciliation');
   require(data.accounts[1].interestRatePercent === 3.5 && availableAccountBalance(data, data.accounts[1]) === 56000, 'savings reservation/APY');
   require(data.goals.length === 1 && data.goals[0].name === 'Emergency Fund' && goalSummary(data, data.goals[0]).progressPercent === 12, 'Emergency Fund');
   require(data.paychecks.every((p,i) => unallocatedForPaycheck(data,p.id) === [5700,6200,7700,12700][i]), 'unallocated amounts');
