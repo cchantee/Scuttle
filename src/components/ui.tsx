@@ -81,7 +81,7 @@ function BottomNavigation() {
   </View>;
 }
 function AddMenuItem({ label, icon, tint, onPress }: { label: string; icon: IconName; tint: string; onPress: () => void }) {
-  return <Pressable accessibilityRole="button" onPress={onPress} style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', minHeight: 56, gap: 12, padding: 8, borderRadius: 8, backgroundColor: pressed ? colors.background : surface })}><IconTile name={icon} tint={tint} /><View style={{ flex: 1, gap: 2 }}><Text style={{ fontSize: 15, fontWeight: '600' }}>{label}</Text><Text style={{ fontSize: 11, color: muted }}>{label === 'Add Transaction' ? 'Spending, bills, income, or transfers' : label === 'Add Paycheck' ? 'Plan upcoming pay or record a deposit' : label === 'Budget' ? 'Give your paycheck a plan' : label === 'Move Money' ? 'Reassign your category budgets' : 'Put money toward what matters'}</Text></View><Text style={{ color: muted }}>›</Text></Pressable>;
+  return <Pressable accessibilityRole="button" onPress={onPress} style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', minHeight: 56, gap: 12, padding: 8, borderRadius: 8, backgroundColor: pressed ? colors.background : surface })}><IconTile name={icon} tint={tint} /><View style={{ flex: 1, gap: 2 }}><Text style={{ fontSize: 15, fontWeight: '600' }}>{label}</Text></View><Text style={{ color: muted }}>›</Text></Pressable>;
 }
 
 export const Page = ({ title, children, showTabs = true, headerRight, footer }: React.PropsWithChildren<{ title: string; showTabs?: boolean; headerRight?: React.ReactNode; footer?: React.ReactNode }>) => {

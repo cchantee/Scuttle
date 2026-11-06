@@ -1,3 +1,4 @@
+import { PaycheckReminderNotice } from '../src/components/PaycheckReminderNotice';
 import { LoadingRecords } from '../src/components/LoadingRecords';
 import React from 'react';
 import { useFonts } from 'expo-font';
@@ -28,6 +29,7 @@ function Routes() {
       <Stack.Screen name="paychecks" />
       <Stack.Screen name="budget" />
       <Stack.Screen name="transactions" />
+      <Stack.Screen name="reminders" />
       <Stack.Screen name="accounts" />
       <Stack.Screen name="goals" />
       <Stack.Screen name="history" />
@@ -40,7 +42,7 @@ function Routes() {
       <Stack.Screen name="goal/new" options={{ title: 'Create goal' }} />
       <Stack.Screen name="transaction/new" options={{ title: 'Add transaction' }} />
     </Stack.Protected>
-  </Stack></WalkthroughProvider>;
+  </Stack><PaycheckReminderNotice /></WalkthroughProvider>;
 }
 
 function LoadedApp({ retry }: { retry: () => void }) {

@@ -1,3 +1,6 @@
+import { currentPaycheck } from '../src/domain/navigation';
+import { colors } from '../src/design/theme';
+import { CoastalBalance } from '../src/components/coastal';
 import { Card, ProgressBar, SectionTitle } from '../src/components/ui';
 import { Completion, EmptyState } from '../src/components/coastal';
 import { Text } from '../src/components/typography';
@@ -7,7 +10,7 @@ import { View } from 'react-native';
 import { Action, DateField, Field, Feedback, Page, RecordLine, SelectId } from '../src/components/ui';
 import { useCrud } from '../src/components/hooks';
 import { formatMoney, parseMoney } from '../src/domain/money';
-import { Paycheck, newId } from '../src/domain/models';
+import { newId } from '../src/domain/models';
 import { allocatedForPaycheck, unallocatedForPaycheck } from '../src/domain/calculations';
 import { useData } from '../src/state/DataProvider';
 import { formatDateDisplay, formatDateInput, normalizeDateInput, todayDateInput } from '../src/domain/date';
@@ -17,13 +20,17 @@ export default function Paychecks() {
   const crud = useCrud('paychecks');
   const router = useRouter();
   const { data, loading, saveRecord, receivePaycheck, movePaycheckToAccount, reportError } = useData();
-  const params = useLocalSearchParams<{ paycheckId?: string; add?: string; receive?: string }>();
+  const params = useLocalSearchParams<{ paycheckId?: string; add?: string; receive?: string; view?: string }>();
   const initializedId = useRef('');
   const focused = useIsFocused();
   const saving = useRef(false);
   const [status, setStatus] = useState<'planned' | 'received'>('received');
   const [savedId, setSavedId] = useState('');
   const [formOpen, setFormOpen] = useState(false);
+  const [showArchive, setShowArchive] = useState(false);
+  const current = currentPaycheck(data);
+  const older = data.paychecks.filter(p => p.id !== current?.id).sort((a,b)=>b.receivedAt.localeCompare(a.receivedAt));
+  useEffect(() => { if (focused) setShowArchive(params.view === 'archive'); }, [focused, params.view]);
   const [amount, setAmount] = useState('');
   const [date, setDate] = useState(todayDateInput(data.user));
   const [source, setSource] = useState('');
@@ -70,13 +77,19 @@ export default function Paychecks() {
       if (existing && existing.status !== 'planned' && fundingMode === 'account' && accountId !== (existing.remainingAccountId ?? existing.accountId)) {
         if (!await movePaycheckToAccount(existing.id, accountId)) return;
       }
+      const received = status === 'received';
       setSavedId(recordId); reset();
-      if (existing?.status === 'planned' && status === 'received') router.replace({ pathname: '/paycheck/[id]', params: { id: recordId } });
+      if (received) router.replace({ pathname: '/paycheck/[id]', params: { id: recordId } });
     } catch (e) { reportError(e instanceof Error ? e.message : 'Invalid paycheck.'); } finally { saving.current = false; }
   };
   return <Page title={formOpen ? (crud.editingId ? 'Edit paycheck' : 'New paycheck') : 'Paycheck'}><TourHighlight id="paychecks-main"><Feedback />
     {savedId && !formOpen ? <><Completion message="Your paycheck is ready to plan." /><Action label="Review paycheck & allocations" variant="primary" fullWidth onPress={() => router.push({ pathname: '/paycheck/[id]', params: { id: savedId } })} /></> : null}
-    {!formOpen ? <Action label="+ Add paycheck" variant="primary" fullWidth onPress={() => setFormOpen(true)} /> : <>
+    {!formOpen ? <>
+      {current ? <><CoastalBalance title="Current paycheck" amount={formatMoney(current.amountCents)} subtitle={`${current.source || 'Income'} · ${formatDateDisplay(current.receivedAt)}`} /><View style={{flexDirection:'row',justifyContent:'space-between'}}><Text style={{fontSize:13,color:colors.muted}}>Left to assign</Text><Text role="money">{formatMoney(unallocatedForPaycheck(data,current.id))}</Text></View><ProgressBar value={allocatedForPaycheck(data,current.id)} max={current.amountCents}/><Action label="Open paycheck plan" variant="primary" fullWidth onPress={()=>router.push({pathname:'/paycheck/[id]',params:{id:current.id}})}/></> : null}
+      <Action label="+ Add paycheck" variant={current?'secondary':'primary'} fullWidth onPress={() => setFormOpen(true)} />
+      {older.length ? <Action label={showArchive?'Hide other paychecks':`View other paychecks (${older.length})`} variant="text" fullWidth onPress={()=>setShowArchive(!showArchive)}/> : null}
+      {showArchive ? <SectionTitle>Previous & planned paychecks</SectionTitle> : null}
+    </> : <>
       {!crud.editingId || data.paychecks.find(p => p.id === crud.editingId)?.status === 'planned' ? <View style={{ flexDirection: 'row', gap: 10 }}><Action label="Planned" variant={status === 'planned' ? 'primary' : 'secondary'} onPress={() => setStatus('planned')} /><Action label="Received" variant={status === 'received' ? 'primary' : 'secondary'} onPress={() => setStatus('received')} /></View> : null}
       <Field label={status === 'planned' ? 'Expected amount' : 'Amount received'} value={amount} onChangeText={setAmount} keyboardType="decimal-pad" placeholder="0.00" />
       <DateField label={status === 'planned' ? 'Expected date' : 'Date received'} value={date} onChangeText={setDate} />
@@ -88,17 +101,17 @@ export default function Paychecks() {
         <Action label="Deposit to an account" variant={fundingMode === 'account' ? 'primary' : 'secondary'} onPress={() => setFundingMode('account')} />
       </View>
       {fundingMode === 'account' ? <>
-        <Text>Recording a deposit updates the account balance. Paycheck allocations remain separate and do not deposit the money again.</Text>
+
         <SelectId label={data.paychecks.find(p => p.id === crud.editingId)?.accountId ? 'Move remaining funds to account' : 'Deposit account'} choices={data.accounts.map(item => ({ id: item.id, title: `${item.name}${item.type === 'credit_card' ? ' · card debt' : ''}`}))} value={accountId} onChange={setAccountId} create="account" />
         {data.paychecks.find(p => p.id === crud.editingId)?.accountId ? <Text>Only unspent funds move. This paycheck’s allocations and linked expenses stay in its history.</Text> : null}
       </> : null}
-      </> : <Text>This is a plan. No income is added to an account until you mark it received.</Text>}
+      </> : null}
       <Field label="Notes (optional)" value={notes} onChangeText={setNotes} multiline />
       <Action label={status === 'planned' ? 'Save paycheck plan' : 'Save paycheck'} variant="primary" fullWidth onPress={() => void submit()} />
       <Action label="Cancel" onPress={reset} />
     </>}
     {!data.paychecks.length ? <EmptyState message="Make every paycheck count." /> : null}
-    {!formOpen ? ([...data.paychecks] as Paycheck[]).sort((a, b) => b.receivedAt.localeCompare(a.receivedAt)).map(p => {
+    {!formOpen && showArchive ? older.map(p => {
       const depositName = data.accounts.find(account => account.id === p.accountId)?.name;
       const currentFundsName = data.accounts.find(account => account.id === (p.remainingAccountId ?? p.accountId))?.name;
       const accountDetail = p.accountId ? `Deposited to ${depositName ?? 'account'}${currentFundsName && currentFundsName !== depositName ? ` · remaining funds moved to ${currentFundsName}` : ''} · ` : 'Paycheck only · ';

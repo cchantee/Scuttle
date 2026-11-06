@@ -1,3 +1,6 @@
+import { currentPaycheck } from '../src/domain/navigation';
+import { defaultActivityDate, transactionInPaycheck } from '../src/domain/paycheckActivity';
+import { CoastalBalance } from '../src/components/coastal';
 import { goalFundsHeld, goalHoldingAccount } from '../src/domain/goalFunds';
 import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
@@ -19,26 +22,28 @@ const kinds: {id: TransactionFormKind; title: string}[] = [
   {id:'expense',title:'Expense'}, {id:'bill',title:'Bill'}, {id:'income',title:'Income'}, {id:'transfer',title:'Transfer'}, {id:'subscription',title:'Subscription'},
 ];
 const frequencies: SubscriptionFrequency[] = ['weekly','biweekly','monthly','annual','custom'];
-const filters = [{id:'all',title:'All'}, {id:'expense',title:'Spending'}, {id:'bill',title:'Bills'}, {id:'income',title:'Income'}, {id:'transfer',title:'Transfers'}, {id:'subscription',title:'Subscriptions'}] as const;
+const filters = [{id:'all',title:'All types'}, {id:'expense',title:'Spending'}, {id:'bill',title:'Bills'}, {id:'income',title:'Income'}, {id:'transfer',title:'Transfers'}, {id:'subscription',title:'Subscriptions'}] as const;
 
 export default function Transactions() {
   const crud=useCrud('transactions');
   const {data,loading,reportError,settleGoalContribution}=useData();
   const router=useRouter(), pathname=usePathname(), focused=useIsFocused();
-  const params=useLocalSearchParams<{allocationId?:string;accountId?:string;editId?:string;goalContributionId?:string;type?:string}>();
+  const params=useLocalSearchParams<{allocationId?:string;accountId?:string;editId?:string;goalContributionId?:string;type?:string;reminder?:string;scope?:string}>();
   const [formOpen,setFormOpen]=useState(pathname==='/transaction/new');
   const [kind,setKind]=useState<TransactionFormKind>('expense'), [scheduledBill,setScheduledBill]=useState(false);
-  const [description,setDescription]=useState(''),[amount,setAmount]=useState(''),[date,setDate]=useState(todayDateInput(data.user));
+  const [description,setDescription]=useState(''),[amount,setAmount]=useState(''),[date,setDate]=useState(formatDateInput(defaultActivityDate(data)));
   const [categoryId,setCategory]=useState(''),[allocationId,setAllocation]=useState(''),[accountId,setAccount]=useState(''),[toAccountId,setToAccount]=useState('');
   const [paycheckId,setPaycheckId]=useState(''),[notes,setNotes]=useState('');
   const [frequency,setFrequency]=useState<SubscriptionFrequency>('monthly'),[interval,setInterval]=useState(''),[dueDate,setDueDate]=useState(todayDateInput(data.user));
+  const [scope,setScope]=useState('current');
+  const current=currentPaycheck(data);
   const [filter,setFilter]=useState<typeof filters[number]['id']>('all'),[search,setSearch]=useState(''),[saved,setSaved]=useState(false),[busy,setBusy]=useState(false);
   const manualAccount=useRef(false), saving=useRef(false), applied=useRef('');
   const type=ledgerType(kind,scheduledBill), scheduled=type==='subscription', spending=type==='expense';
   const pending=data.contributions.find(c=>c.id===params.goalContributionId && goalFundsHeld(data,c));
-  const routeKey=JSON.stringify([pathname,params.editId,params.allocationId,params.accountId,params.goalContributionId,params.type]);
+  const routeKey=JSON.stringify([pathname,params.editId,params.allocationId,params.accountId,params.goalContributionId,params.type,params.reminder]);
   const clearDraft=()=>{
-    manualAccount.current=false;crud.cancel();setKind('expense');setScheduledBill(false);setDescription('');setAmount('');setDate(todayDateInput(data.user));
+    manualAccount.current=false;crud.cancel();setKind('expense');setScheduledBill(false);setDescription('');setAmount('');setDate(formatDateInput(defaultActivityDate(data)));
     setCategory('');setAllocation('');setAccount('');setToAccount('');setPaycheckId('');setNotes('');setFrequency('monthly');setInterval('');setDueDate(todayDateInput(data.user));
   };
   const fill=(tx:Transaction)=>{
@@ -50,6 +55,8 @@ export default function Transactions() {
     if(!focused){applied.current='';return;}
     if(loading||applied.current===routeKey)return;
     applied.current=routeKey;clearDraft();setFormOpen(pathname==='/transaction/new');
+    if(params.scope==='all')setScope('all');
+    if(params.reminder==='1')setScheduledBill(true);
     const tx=data.transactions.find(t=>t.id===params.editId);
     if(tx){fill(tx);crud.setEditingId(tx.id);return;}
     if(params.type&&kinds.some(k=>k.id===params.type))setKind(params.type as TransactionFormKind);
@@ -65,7 +72,7 @@ export default function Transactions() {
   },[data,loading,formOpen,spending,crud.editingId,params.goalContributionId,allocationId,categoryId,accountId]);
   const close=()=>{
     clearDraft();setFormOpen(false);
-    router.replace({pathname:'/transactions',params:{editId:undefined,allocationId:undefined,accountId:undefined,goalContributionId:undefined,type:undefined}});
+    router.replace({pathname:'/transactions',params:{editId:undefined,allocationId:undefined,accountId:undefined,goalContributionId:undefined,type:undefined,reminder:undefined,scope:undefined}});
   };
   const submit=async()=>{
     if(saving.current)return;
@@ -95,8 +102,10 @@ export default function Transactions() {
     fill({id:'bill-payment-draft',...billPaymentDraft(data,tx,todayISODate(data.user))});crud.cancel();setScheduledBill(false);setPaycheckId('');manualAccount.current=Boolean(tx.accountId);
   };
   const filtered=[...data.transactions].filter(tx=>{
+    if(tx.type==='subscription')return false;
+    if(scope!=='all'&&!transactionInPaycheck(data,tx,current))return false;
     const query=search.trim().toLowerCase(),bill=isBill(data,tx);
-    const matches=filter==='all'||filter==='bill'&&bill||filter==='subscription'&&tx.type==='subscription'&&!bill||filter!=='bill'&&filter!=='subscription'&&tx.type===filter;
+    const matches=filter==='all'||filter==='bill'&&bill||filter!=='bill'&&filter!=='subscription'&&tx.type===filter;
     return matches&&(!query||`${tx.description} ${transactionTypeLabel(data,tx)} ${data.categories.find(c=>c.id===tx.categoryId)?.name??''} ${data.accounts.find(a=>a.id===tx.accountId)?.name??''} ${tx.date}`.toLowerCase().includes(query));
   }).sort((a,b)=>(b.type==='subscription'?b.nextDueDate??b.date:b.date).localeCompare(a.type==='subscription'?a.nextDueDate??a.date:a.date));
   const spent=filtered.filter(t=>t.type==='expense').reduce((n,t)=>n+t.amountCents,0);
@@ -104,11 +113,13 @@ export default function Transactions() {
   return <Page title={formOpen?crud.editingId?'Edit transaction':'Add transaction':'Transactions'}><TourHighlight id="expense-main"><Feedback />
     {saved&&!formOpen?<View accessibilityLiveRegion="polite" style={{padding:13,borderRadius:14,backgroundColor:colors.glass}}><Text style={{fontSize:13}}>Your transaction was saved.</Text></View>:null}
     {!formOpen?<>
-      <Card style={{backgroundColor:colors.glass}}><Text style={{fontSize:12,color:colors.muted}}>Recorded spending</Text><Text role="money" style={{fontSize:32}}>{formatMoney(spent)}</Text><Text style={{fontSize:12,color:colors.muted}}>Paid expenses & bills</Text></Card>
+      <CoastalBalance title={scope==='all'?'All recorded spending':'Spending this paycheck'} amount={formatMoney(spent)} subtitle={scope==='all'?'All paychecks':current?`${current.source || 'Paycheck'} · ${formatDateDisplay(current.receivedAt)}`:'Record a paycheck to start'}/>
+      <SelectId label="Show transactions" choices={[{id:'current',title:'This paycheck'},{id:'all',title:'All'}]} value={scope} onChange={value=>setScope(value||'current')}/>
+      <Action label="Bills & reminders →" variant="text" onPress={()=>router.push('/reminders')}/>
       <Action label="+ Add transaction" variant="primary" fullWidth onPress={()=>router.push('/transaction/new')} />
       <Field label="Search activity" value={search} onChangeText={setSearch} placeholder="Payee, bill, account, or category" />
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{gap:7}}>{filters.map(f=><Chip key={f.id} label={f.title} selected={filter===f.id} onPress={()=>setFilter(f.id)} />)}</ScrollView>
-      {!filtered.length?<EmptyState message="No matching activity."/>:null}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{gap:7}}>{filters.filter(f=>f.id!=='subscription').map(f=><Chip key={f.id} label={f.title} selected={filter===f.id} onPress={()=>setFilter(f.id)} />)}</ScrollView>
+      {!filtered.length?<EmptyState message={scope==='all'?'No matching activity.':'No transactions for this paycheck yet.'}/>:null}
       {filtered.map(tx=><RecordLine key={tx.id} icon={tx.type==='transfer'?'move':isBill(data,tx)?'home':tx.type==='subscription'?'calendar':'transaction'} title={tx.description}
         amount={`${tx.type==='expense'?'−':tx.type==='income'?'+':''}${formatMoney(tx.amountCents)}`}
         detail={`${transactionTypeLabel(data,tx)} · ${formatDateDisplay(tx.type==='subscription'?tx.nextDueDate??tx.date:tx.date)}${tx.accountId?` · ${data.accounts.find(a=>a.id===tx.accountId)?.name??'Account'}`:''}`}
@@ -128,7 +139,7 @@ export default function Transactions() {
 
         <Field label="Notes (optional)" value={notes} onChangeText={setNotes} multiline/>
       </Card>
-      <Action label={busy?'Saving…':params.goalContributionId?'Post reserved payment':crud.editingId?'Save changes':kind==='bill'?scheduled?'Save bill reminder':'Save bill payment':scheduled?'Save subscription':'Save transaction'} variant="primary" fullWidth onPress={()=>void submit()}/>
+      <Action label={busy?'Saving…':params.goalContributionId?'Move money':crud.editingId?'Save changes':kind==='bill'?scheduled?'Save bill reminder':'Save bill payment':scheduled?'Save subscription':'Save transaction'} variant="primary" fullWidth onPress={()=>void submit()}/>
       <Action label="Cancel" variant="text" fullWidth onPress={close}/>
     </>}
   </TourHighlight></Page>;

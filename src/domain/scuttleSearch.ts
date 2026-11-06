@@ -41,7 +41,7 @@ export function searchScuttle(data: AppData, input: string): ScuttleSearchResult
   for(const [label,path,aliases] of [
     ['Accounts','/accounts','balances cash checking savings'],['Paychecks','/paychecks','income salary payday'],
     ['Budget categories','/budget','budgets allocations'],['Savings goals','/goals','goals saving'],
-    ['Transactions','/transactions','expenses income bills recurring subscriptions'],['Financial history','/history','activity records past'],
+    ['Transactions','/transactions','expenses income bills recurring subscriptions'],['Financial history','/history','activity records past'],['Bills & reminders','/reminders','subscriptions recurring due dates'],
     ['Profile','/profile','name personal details'],['More and settings','/more','settings preferences'],
     ['Add transaction','/transaction/new','record expense purchase bill'],['Add to goal','/add-to-goal','reserve contribution save'],
     ['Create savings goal','/goal/new','new goal'],['Move money','/move-money','transfer accounts'],
