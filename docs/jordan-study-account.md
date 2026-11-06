@@ -79,3 +79,5 @@ Reset also changes Jordan’s admin-owned session reset marker. Updated interfac
 
 ### Cash starting balance
 Jordan’s default study fixture includes **Cash**, type cash, with a $300 opening and ending balance. This is separate cash on hand: no income or bank transfer is created. The reset restores checking $245, savings $680 ($120 reserved), and Cash $300. Participant tasks remain incomplete.
+
+StreamFlix starts due November 14, 2026 ($15 monthly). Historical paid charges stay unchanged. Apply the new starting date on the next researcher reset.

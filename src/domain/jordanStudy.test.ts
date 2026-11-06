@@ -270,3 +270,9 @@ describe('researcher-only Jordan reset', () => {
   expect(data.paychecks.some(p => p.accountId === cash.id)).toBe(false);
   verifyJordanTaylorStartingData(data);
  });
+
+it('sets the initial StreamFlix reminder to November 14 without altering paid history', () => {
+  const d=buildJordanTaylorSnapshot('reminder-date-test');
+  expect(d.transactions.find(t=>t.id==='jordan:subscription:streaming')?.nextDueDate).toBe('2026-11-14');
+  expect(d.transactions.filter(t=>t.type==='expense'&&t.description==='StreamFlix').map(t=>t.date)).toEqual(['2026-09-16','2026-10-16']);
+});
