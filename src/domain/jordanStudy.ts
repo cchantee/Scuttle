@@ -54,7 +54,7 @@ export const historicalExpenses: [string, string, string, number][] = [
 export const recurringBills: [string, string, number, string][] = [
   ['Apartment Rent','Rent',65000,'2026-12-01'], ['Electric + Water','Utilities',10000,'2026-11-12'],
   ['Car Insurance','Car Insurance',13500,'2026-11-14'], ['Phone','Phone',5500,'2026-11-15'],
-  ['StreamFlix','Subscriptions',1500,'2026-11-16'],
+  ['StreamFlix','Subscriptions',1500,'2026-11-14'],
 ];
 
 /** Fresh, deterministic snapshot: never merge participant activity into a reset. */
@@ -149,6 +149,7 @@ export function verifyJordanTaylorStartingData(data: AppData): void {
   require(data.transactions.filter(t => t.type === 'income').length === 3 && sum('income') === 20500, 'gig income');
   require(data.transactions.filter(t => t.type === 'transfer').length === 3 && sum('transfer') === 18000, 'internal transfers');
   require(data.transactions.filter(t => t.type === 'subscription').length === 5, 'recurring reminders');
+  require(data.transactions.find(t => t.id === 'jordan:subscription:streaming')?.nextDueDate === '2026-11-14', 'StreamFlix study due date');
   require(data.transactions.every(t => !t.interestPosting && !validateTransaction(data, t)), 'invalid transaction or invented interest');
   assertJordanHasNoOverdrafts(data);
   require(data.accounts.length === 3 && accountBalance(data, data.accounts[0]) === 24500 && accountBalance(data, data.accounts[1]) === 68000 && data.accounts[2].name === 'Cash' && data.accounts[2].type === 'cash' && accountBalance(data, data.accounts[2]) === 30000 && availableAccountBalance(data, data.accounts[2]) === 30000, 'account reconciliation');
