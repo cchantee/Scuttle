@@ -1,3 +1,4 @@
+import { startReceivedBudget } from './paycheckBudget';
 import { paycheckPlanFingerprint, savePaycheckPlan, SavePlanOperation } from './paycheckPlan';
 import { AppData, BudgetAllocation, Id, SavingsContribution } from './models';
 import { allocatedForPaycheck, spentForAllocation } from './calculations';
@@ -46,14 +47,14 @@ export function applyPaycheckOperation(data: AppData, operation: PaycheckOperati
     // Validate calendar date through the existing paycheck validator, without transitioning yet.
     const checked = upsertRecord(data, 'paychecks', { ...p, amountCents: operation.amountCents, receivedAt: operation.date });
     if (checked.error) return fail(checked.error);
-    return { data: { ...data, paychecks: data.paychecks.map(item => item.id === p.id ? {
+    return { data: { ...data, paychecks: startReceivedBudget(data.paychecks.map(item => item.id === p.id ? {
       ...p, status: 'received', plannedAmountCents: p.originalPlan?.amountCents ?? p.amountCents, expectedAt: p.originalPlan?.date ?? p.receivedAt,
       originalPlan: p.originalPlan ?? { amountCents: p.amountCents, date: p.receivedAt, source: p.source, notes: p.notes,
         allocations: data.allocations.filter(a => a.paycheckId === p.id).map(a => ({ ...a })),
         goals: data.contributions.filter(c => c.paycheckId === p.id).map(c => ({ ...c })) },
       actualAmountCents: operation.amountCents, amountCents: operation.amountCents,
       receivedAt: operation.date, accountId: account.id, accountCreditCents: operation.amountCents, remainingAccountId: account.id,
-    } : item) } };
+    } : item), p.id) } };
   }
   if (p.allocationHistory?.some(h => h.id === operation.id)) return { data };
   if (!Number.isSafeInteger(operation.amountCents) || operation.amountCents <= 0) return fail('Reallocation must be greater than zero.');

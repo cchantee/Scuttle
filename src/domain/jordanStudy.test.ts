@@ -141,7 +141,7 @@ describe('researcher-only Jordan reset', () => {
       'existing-id': { data: changed, revision: 7 },
       'other-user': { data: buildJordanTaylorSnapshot('other-user'), revision: 15 },
     };
-    const admin = { listUsers: vi.fn(async () => ({ data: { users: [{ id: 'other-user', email: 'someone@example.com' }, { id: 'existing-id', email: 'jordan.taylor@example.com' }] }, error: null })), updateUserById: vi.fn(), createUser: vi.fn(), deleteUser: vi.fn() };
+    const admin = { listUsers: vi.fn(async () => ({ data: { users: [{ id: 'other-user', email: 'someone@example.com' }, { id: 'existing-id', email: 'jordan.taylor@example.com' }] }, error: null })), updateUserById: vi.fn(async () => ({ error: null as { message: string } | null })), createUser: vi.fn(), deleteUser: vi.fn() };
     const faults = { fail: false, conflict: false, corruptReturn: false };
     const writes = vi.fn();
     const client = {
@@ -180,7 +180,11 @@ describe('researcher-only Jordan reset', () => {
     expect(mock.rows['existing-id'].revision).toBe(9);
     expect(mock.rows['other-user']).toEqual(other);
     expect(mock.writes.mock.calls.map(([id]) => id)).toEqual(['existing-id','existing-id']);
-    expect(mock.admin.updateUserById).not.toHaveBeenCalled();
+    expect(mock.admin.updateUserById).toHaveBeenCalledTimes(2);
+    const resets = mock.admin.updateUserById.mock.calls as unknown as [string, { app_metadata: { scuttle_study_reset: string } }][];
+    expect(resets[0][0]).toBe('existing-id');
+    expect(Object.keys(resets[0][1])).toEqual(['app_metadata']);
+    expect(resets[0][1].app_metadata.scuttle_study_reset).not.toBe(resets[1][1].app_metadata.scuttle_study_reset);
     expect(mock.admin.createUser).not.toHaveBeenCalled();
     expect(mock.admin.deleteUser).not.toHaveBeenCalled();
     expect(mock.raw.auth.signOut).not.toHaveBeenCalled();
@@ -228,6 +232,13 @@ describe('researcher-only Jordan reset', () => {
     await expect(resetJordan(mock.client)).rejects.toThrow('Concurrent save');
     expect(mock.rows).toEqual(before);
     expect(mock.writes).not.toHaveBeenCalled();
+  });
+
+  it('reports a sign-out request failure separately after restoring finances', async () => {
+    const mock = mockClient();
+    mock.admin.updateUserById.mockResolvedValueOnce({ error: { message: 'Auth unavailable' } });
+    await expect(resetJordan(mock.client)).rejects.toThrow('Financial data was reset, but session sign-out');
+    expect(mock.rows['existing-id'].data).toEqual(buildJordanTaylorSnapshot('existing-id'));
   });
 
   it('refuses a missing auth account rather than creating a new identity', async () => {

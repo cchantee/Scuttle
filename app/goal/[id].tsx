@@ -1,3 +1,4 @@
+import { goalFundsHeld, goalHoldingAccount } from '../../src/domain/goalFunds';
 import { colors } from '../../src/design/theme';
 import React, { useRef, useState } from 'react';
 import { Link, useRouter } from 'expo-router';
@@ -49,14 +50,14 @@ export default function GoalDetail() {
       if (!contributionDate) return reportError('Enter a valid date as M/D/YYYY.');
       if (!accountId) return reportError('Choose the account funding this contribution.');
       const existing = crud.list.find(item => item.id === crud.editingId);
-      const ok = await crud.submit({ goalId: goal.id, amountCents: parseMoney(amount), date: contributionDate, note: note || undefined, accountId, status: existing?.status === 'posted' ? 'posted' : 'pending', transactionId: existing?.transactionId });
+      const ok = await crud.submit({ goalId: goal.id, amountCents: parseMoney(amount), date: contributionDate, note: note || undefined, accountId, status: existing?.status ?? 'pending', transactionId: existing?.transactionId });
       if (ok) reset();
     } catch (e) { reportError(e instanceof Error ? e.message : 'Invalid contribution.'); } finally { saving.current = false; }
   };
   return <Page title={goal.name}><Feedback />
     <Card style={{ backgroundColor: colors.subtle }}>{summary.savedCents >= goal.targetCents ? <Mascot mood="celebrate" size={44} /> : null}<Text style={{ color: colors.muted, fontSize: 12 }}>Designated toward your goal · includes pending funds</Text><Text style={{ fontSize: 25, color: colors.text, fontWeight: '700' }}>{formatMoney(summary.savedCents)}</Text><Text style={{ color: colors.muted }}>of {formatMoney(goal.targetCents)} · {formatMoney(summary.remainingCents)} remaining</Text><ProgressBar value={summary.savedCents} max={goal.targetCents} /><Text style={{ color: colors.muted }}>{summary.progressPercent.toFixed(0)}% complete{goal.targetDate ? ` · Target ${formatDateDisplay(goal.targetDate)}` : ''}</Text>{pendingForGoal(data, goal.id) ? <Text style={{ color: colors.muted }}>{formatMoney(pendingForGoal(data, goal.id))} pending in selected accounts</Text> : null}</Card>
     {!formOpen ? <Action label="Set aside money" variant="primary" fullWidth onPress={() => setFormOpen(true)} /> : <>
-      {crud.list.find(item => item.id === crud.editingId)?.status === 'posted' ? <Text>Posted amount: {formatMoney(parseMoney(amount) || 0)}</Text> : <Field label="Contribution amount ($)" value={amount} onChangeText={setAmount} keyboardType="decimal-pad" />}
+      {crud.list.find(item => item.id === crud.editingId)?.status === 'posted' ? <Text>Posted amount: {formatMoney(crud.list.find(item => item.id === crud.editingId)?.amountCents ?? 0)}</Text> : <Field label="Contribution amount ($)" value={amount} onChangeText={setAmount} keyboardType="decimal-pad" />}
       {!crud.editingId ? <SelectId label="Where is this money coming from?" choices={[{ id: 'account', title: 'Account or savings' }, { id: 'budget', title: 'Current paycheck category' }]} value={fundingMode} onChange={setFundingMode} /> : null}
       {!crud.editingId && fundingMode === 'budget' ? <>
         <SelectId label="Paycheck category" choices={budgetChoices} value={allocationId} onChange={setAllocationId} />
@@ -75,11 +76,11 @@ export default function GoalDetail() {
     {!contributions.length ? <EmptyState title="Your first step is ready." detail="Designate funds from an account or a paycheck budget group. Contributions do not automatically transfer cash." /> : null}
     {contributions.map(item => {
       if (item.paycheckId) return <RecordLine key={item.id} title={formatMoney(item.amountCents)} detail={data.paychecks.find(p => p.id === item.paycheckId)?.status === 'planned' ? 'Planned paycheck allocation · excluded from actual savings' : 'Paycheck allocation · not transferred'} onEdit={() => router.push({ pathname: '/paycheck/[id]', params: { id: item.paycheckId! } })} onDelete={() => crud.confirmDelete(item.id)} />;
-      const account = data.accounts.find(value => value.id === item.accountId);
+      const account = data.accounts.find(value => value.id === goalHoldingAccount(data, item));
       const linkedTransaction = item.transactionId ? data.transactions.find(value => value.id === item.transactionId) : undefined;
-      const detail = `${formatDateDisplay(item.date)} · ${item.status === 'pending' ? `Pending · ${account?.name ?? 'account'}` : item.status === 'designated' ? `Completed in ${account?.name ?? 'account'}` : item.transactionId ? `${linkedTransaction?.type === 'expense' ? 'Previously posted expense' : 'Transferred'}${linkedTransaction?.toAccountId ? ` to ${data.accounts.find(value => value.id === linkedTransaction.toAccountId)?.name ?? 'account'}` : ''}` : 'Recorded'}${item.note ? ` · ${item.note}` : ''}`;
-      if (item.status !== 'pending') return <RecordLine key={item.id} title={formatMoney(item.amountCents)} detail={detail} onEdit={() => { setAmount((item.amountCents / 100).toFixed(2)); setDate(formatDateInput(item.date)); setNote(item.note ?? ''); setAccountId(item.accountId ?? ''); crud.setEditingId(item.id); setFormOpen(true); }} onDelete={() => crud.confirmDelete(item.id)} />;
-      return <Card key={item.id}><Text style={{ fontWeight: '700' }}>{formatMoney(item.amountCents)} · Pending</Text><Text>{detail}</Text><Action label="Keep in this account" onPress={() => completeGoalContributionInAccount(item.id)} /><Action label="Transfer to another account" onPress={() => router.push({ pathname: '/transaction/new', params: { goalContributionId: item.id } })} /><Action label="Edit" onPress={() => { setAmount((item.amountCents / 100).toFixed(2)); setDate(formatDateInput(item.date)); setNote(item.note ?? ''); setAccountId(item.accountId ?? ''); crud.setEditingId(item.id); setFormOpen(true); }} /><Action label="Cancel reservation" destructive onPress={() => crud.confirmDelete(item.id)} /></Card>;
+      const detail = `${formatDateDisplay(item.date)} · ${item.status === 'pending' ? `Reserved · ${account?.name ?? 'account'}` : item.status === 'designated' ? `Saved · ${account?.name ?? 'account'}` : item.transactionId ? `${linkedTransaction?.type === 'expense' ? 'Previously posted expense' : 'Transferred'}${linkedTransaction?.toAccountId ? ` to ${data.accounts.find(value => value.id === linkedTransaction.toAccountId)?.name ?? 'account'}` : ''}` : 'Recorded'}${item.note ? ` · ${item.note}` : ''}`;
+      if (!goalFundsHeld(data, item)) return <RecordLine key={item.id} title={formatMoney(item.amountCents)} detail={detail} onEdit={() => { setAmount((item.amountCents / 100).toFixed(2)); setDate(formatDateInput(item.date)); setNote(item.note ?? ''); setAccountId(item.accountId ?? ''); crud.setEditingId(item.id); setFormOpen(true); }} onDelete={() => crud.confirmDelete(item.id)} />;
+      return <Card key={item.id}><Text style={{ fontWeight: '700' }}>{formatMoney(item.amountCents)} · {item.status === 'pending' ? 'Reserved' : 'Saved'}</Text><Text>{detail}</Text><Action label="Keep in this account" onPress={() => completeGoalContributionInAccount(item.id)} /><Action label="Move money" onPress={() => router.push({ pathname: '/transaction/new', params: { goalContributionId: item.id } })} /><Action label="Edit" onPress={() => { setAmount((item.amountCents / 100).toFixed(2)); setDate(formatDateInput(item.date)); setNote(item.note ?? ''); setAccountId(item.accountId ?? ''); crud.setEditingId(item.id); setFormOpen(true); }} /><Action label="Cancel reservation" destructive onPress={() => crud.confirmDelete(item.id)} /></Card>;
     })}
   </Page>;
 }

@@ -1,3 +1,5 @@
+import { goalFundsHeld, goalHoldingAccount } from '../src/domain/goalFunds';
+import { payingAccountSelection } from '../src/domain/transactionAccounts';
 import { colors } from '../src/design/theme';
 import React, { useEffect, useRef, useState } from 'react';
 import { Pressable, View } from 'react-native';
@@ -30,6 +32,7 @@ export default function Transactions() {
   const [categoryId, setCategory] = useState('');
   const [allocationId, setAllocation] = useState('');
   const [accountId, setAccount] = useState('');
+  const accountManuallySelected = useRef(false);
   const [toAccountId, setToAccount] = useState('');
   const [paycheckId, setPaycheckId] = useState('');
   const [notes, setNotes] = useState('');
@@ -40,6 +43,7 @@ export default function Transactions() {
   const paramKey = `${params.editId ?? ''}|${params.allocationId ?? ''}|${params.accountId ?? ''}|${params.goalContributionId ?? ''}|${params.type ?? ''}|${params.toAccountId ?? ''}`;
 
   const fill = (tx: Transaction) => {
+    accountManuallySelected.current = true;
     setKind(tx.type); setDescription(tx.description); setAmount((tx.amountCents / 100).toFixed(2)); setDate(formatDateInput(tx.date));
     setCategory(tx.categoryId ?? ''); setAllocation(tx.allocationId ?? ''); setAccount(tx.accountId ?? '');
     setToAccount(tx.toAccountId ?? ''); setPaycheckId(tx.paycheckId ?? ''); setNotes(tx.notes ?? ''); setFormOpen(true);
@@ -52,19 +56,26 @@ export default function Transactions() {
     if (params.toAccountId && data.accounts.some(a => a.id === params.toAccountId)) setToAccount(params.toAccountId);
     const toEdit = data.transactions.find(item => item.id === params.editId);
     if (toEdit) { fill(toEdit); crud.setEditingId(toEdit.id); }
-    const contribution = data.contributions.find(item => item.id === params.goalContributionId && item.status === 'pending');
+    const contribution = data.contributions.find(item => item.id === params.goalContributionId && goalFundsHeld(data,item));
     if (contribution) {
       setKind('transfer'); setDescription(`Goal contribution · ${data.goals.find(goal => goal.id === contribution.goalId)?.name ?? 'Savings goal'}`);
-      setAmount((contribution.amountCents / 100).toFixed(2)); setDate(todayDateInput(data.user)); setAccount(contribution.accountId ?? '');
+      setAmount((contribution.amountCents / 100).toFixed(2)); setDate(todayDateInput(data.user)); setAccount(goalHoldingAccount(data,contribution) ?? '');
       setCategory(''); setAllocation(''); setFormOpen(true);
     }
     const allocation = data.allocations.find(item => item.id === params.allocationId);
     if (allocation) { setAllocation(allocation.id); setCategory(allocation.categoryId); }
-    if (!params.goalContributionId && params.accountId && data.accounts.some(item => item.id === params.accountId)) setAccount(params.accountId);
+    if (!params.goalContributionId && params.accountId && data.accounts.some(item => item.id === params.accountId)) { accountManuallySelected.current = true; setAccount(params.accountId); }
     appliedParams.current = paramKey;
   }, [loading, data.transactions, data.contributions, data.goals, data.allocations, data.accounts, params.allocationId, params.accountId, params.editId, params.goalContributionId, paramKey]);
 
+  useEffect(() => {
+    if (loading || !formOpen || kind !== 'expense' || crud.editingId || params.goalContributionId) return;
+    const next = payingAccountSelection(data, { allocationId, categoryId }, { accountId, manual: accountManuallySelected.current });
+    if (next !== accountId) setAccount(next);
+  }, [data, loading, formOpen, kind, crud.editingId, params.goalContributionId, allocationId, categoryId, accountId]);
+
   const reset = (close = true) => {
+    accountManuallySelected.current = false;
     setKind('expense'); setDescription(''); setAmount(''); setDate(todayDateInput(data.user));
     setCategory(''); setAllocation(''); setAccount(''); setToAccount(''); setPaycheckId(''); setNotes(''); setSubscriptionFrequency('monthly'); setSubscriptionInterval(''); setNextDueDate(todayDateInput(data.user)); crud.cancel();
     if (close) {
@@ -74,6 +85,7 @@ export default function Transactions() {
   };
   const submit = async () => {
     try {
+      if ((kind === 'expense' || kind === 'transfer') && !accountId) return reportError('Choose a paying account.');
       if (!description.trim()) return reportError('Enter a transaction description.');
       const transactionDate = normalizeDateInput(date);
       if (!transactionDate) return reportError('Enter a valid date as M/D/YYYY.');
@@ -122,9 +134,9 @@ export default function Transactions() {
       <Action label="+ Add transaction" variant="primary" fullWidth onPress={() => router.push('/transaction/new')} />
     </> : <>
       <Eyebrow>Keep the details in view</Eyebrow><Text style={{ color: colors.muted }}>{kind === 'transfer' ? 'Choose where money leaves and where it arrives. Transfers and credit card payments are not expenses.' : kind === 'income' ? 'Record money received. For a paycheck with budget allocations, use Add → Paycheck instead.' : kind === 'subscription' ? 'A subscription is a reminder. Log the actual charge as an expense when paid.' : 'Record a purchase and choose its account and budget category.'}</Text>
-      {params.goalContributionId ? <View style={{ padding: 12, borderRadius: 10, backgroundColor: colors.subtle }}><Text>Transfer this reserved amount to another account. Scuttle records both sides, releases the pending hold, and keeps goal progress counted once.</Text></View> : null}
+      {params.goalContributionId ? <View style={{ padding: 12, borderRadius: 10, backgroundColor: colors.subtle }}><Text>Move committed money to another account. Your goal amount stays the same.</Text></View> : null}
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>{(params.goalContributionId ? ['transfer'] as TransactionType[] : kinds).map(value => <Pressable key={value} accessibilityRole="button" accessibilityState={{ selected: kind === value }} onPress={() => setKind(value)} style={{ paddingHorizontal: 14, paddingVertical: 9, borderWidth: 1, borderColor: kind === value ? colors.muted : colors.border, minHeight: 48, borderRadius: 14, backgroundColor: kind === value ? colors.evergreen : colors.surface }}><Text style={{ color: kind === value ? colors.onPrimary : colors.text, fontWeight: kind === value ? '700' : '400' }}>{value === 'expense' ? 'Expense' : value === 'income' ? 'Income' : value === 'transfer' ? 'Transfer' : 'Subscription'}</Text></Pressable>)}</View>
-      {params.goalContributionId ? <Text>Pending amount to post: {formatMoney(parseMoney(amount) || 0)}</Text> : <Field label="Amount ($)" value={amount} onChangeText={setAmount} keyboardType="decimal-pad" placeholder="0.00" />}
+      {params.goalContributionId ? <Text>Amount to move: {formatMoney(data.contributions.find(item => item.id === params.goalContributionId)?.amountCents ?? 0)}</Text> : <Field label="Amount ($)" value={amount} onChangeText={setAmount} keyboardType="decimal-pad" placeholder="0.00" />}
       <Field label="What was it for?" value={description} onChangeText={setDescription} placeholder={kind === 'transfer' ? 'e.g. Move to savings' : 'e.g. Groceries'} />
       {kind === 'subscription' ? <>
         <Text style={{ fontWeight: '600' }}>Repeat schedule</Text>
@@ -141,10 +153,10 @@ export default function Transactions() {
         <SelectId label="Budget category (optional)" choices={data.categories.map(item => ({ id: item.id, title: item.name }))} value={categoryId} onChange={setCategory} create="category" />
         <Text style={{ color: colors.muted, fontSize: 12 }}>This reminder appears on the dashboard and budget page when a charge is approaching.</Text>
       </> : null}
-      {params.goalContributionId ? <Text>Funding account: {data.accounts.find(item => item.id === accountId)?.name ?? 'Missing account'}</Text> : <SelectId label={kind === 'transfer' ? 'Source account' : kind === 'subscription' ? 'Account charged (optional)' : kind === 'income' ? 'Receiving account (optional)' : 'Account (optional)'} choices={data.accounts.map(item => ({ id: item.id, title: `${item.name}${item.type === 'credit_card' ? ' · credit card' : ''}`}))} value={accountId} onChange={value => { setAccount(value); if (toAccountId === value) setToAccount(''); }} create="account" />}
+      {params.goalContributionId ? <Text>Funding account: {data.accounts.find(item => item.id === accountId)?.name ?? 'Missing account'}</Text> : <SelectId label={kind === 'transfer' ? 'Source account' : kind === 'subscription' ? 'Account charged (optional)' : kind === 'income' ? 'Receiving account (optional)' : kind === 'expense' ? 'Paying account' : 'Account (optional)'} choices={data.accounts.map(item => ({ id: item.id, title: `${item.name}${item.type === 'credit_card' ? ' · credit card' : ''}`}))} value={accountId} onChange={value => { accountManuallySelected.current = true; setAccount(value); if (toAccountId === value) setToAccount(''); }} create="account" />}
       {kind === 'transfer' ? <SelectId label="Destination account" choices={data.accounts.filter(item => item.id !== accountId).map(item => ({ id: item.id, title: item.name }))} value={toAccountId} onChange={setToAccount} create="account" /> : null}
       <Disclosure title="Add a note" initiallyOpen={Boolean(notes)}><Field label="Note" value={notes} onChangeText={setNotes} multiline /></Disclosure>
-      <Action label={crud.editingId ? 'Save changes' : params.goalContributionId ? 'Post transfer and clear reservation' : kind === 'subscription' ? 'Save subscription' : kind === 'expense' ? 'Save spending' : kind === 'income' ? 'Save income' : 'Save transfer'} variant="primary" fullWidth onPress={() => submit()} />
+      <Action label={crud.editingId ? 'Save changes' : params.goalContributionId ? 'Move money' : kind === 'subscription' ? 'Save subscription' : kind === 'expense' ? 'Save spending' : kind === 'income' ? 'Save income' : 'Save transfer'} variant="primary" fullWidth onPress={() => submit()} />
       <Action label="Cancel" onPress={() => reset()} />
     </>}
     {!formOpen ? <>

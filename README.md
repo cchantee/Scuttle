@@ -84,3 +84,7 @@ Add a paycheck, then use **Save paycheck & budget** to enter its category and go
 Budget now separates **Spending**, **Planned**, and **Archived**. Activity offers **Money activity** or **All records**. Record rows open directly; their **⋯** menus expose edit/delete. See [the independent UX evaluation and verification log](AI-design-decisions.md#ux-refinement) for decisions, financial safeguards, browser scenarios, and remaining manual checks.
 
 The former `AI_Designed_App_2` continuation is consolidated into `AI_Designed_App`, including its full commit history and the finalized Jordan study fixture, protected reset, and walkthrough fixes. Use `AI_Designed_App` for the AI-only study condition.
+
+## Launch any research interface
+
+Run `npm run test:interface` and choose 1 (Human), 2 (AI), or 3 (Human + AI). Ctrl+C stops Expo and returns to the selector. Separate Git worktrees preserve each design and dependency lockfile. See [setup, iPhone, and study instructions](docs/interface-launcher.md).

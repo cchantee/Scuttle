@@ -80,7 +80,7 @@ export function buildJordanTaylorSnapshot(userId: string): AppData {
   const gigs: Transaction[] = ([['2026-09-19','Tutoring',6500],['2026-10-17','Delivery gig',8500],['2026-10-31','Tutoring',5500]] as const)
     .map(([date, description, amountCents], index) => ({ id: `jordan:gig:${index + 1}`, date, description, amountCents, type: 'income', accountId: checking }));
   const transfers: Transaction[] = ([['2026-09-25',7500],['2026-10-23',6500],['2026-10-31',4000]] as const)
-    .map(([date, amountCents], index) => ({ id: `jordan:transfer:${index + 1}`, date, amountCents, description: 'Transfer to Rainy Day Savings', type: 'transfer', accountId: checking, toAccountId: savings }));
+    .map(([date, amountCents], index) => ({ id: `jordan:transfer:${index + 1}`, date, amountCents, description: 'Transfer to Capital One 360 Performance Savings', type: 'transfer', accountId: checking, toAccountId: savings }));
   const reminders: Transaction[] = recurringBills.map(([description, category, amountCents, nextDueDate], index) => ({
     id: description === 'StreamFlix' ? 'jordan:subscription:streaming' : `jordan:bill:${index + 1}`,
     description, categoryId: categoryId(category), amountCents, date: STUDY_DATE, nextDueDate,
@@ -90,9 +90,9 @@ export function buildJordanTaylorSnapshot(userId: string): AppData {
   return {
     version: 2, user: { id: userId, displayName: 'Jordan Taylor', paydayFrequency: 'biweekly', nextPayday: SCENARIO_PAYDAY, studySnapshotDate: STUDY_DATE },
     accounts: [
-      { id: checking, name: 'Everyday Checking', type: 'checking', initialBalanceCents: 18000, interestRatePercent: 0, interestStartDate: '2026-09-06', interestRateHistory: [{ effectiveDate: '2026-09-06', ratePercent: 0 }], notes: 'Opening balance on 2026-09-06' },
-      { id: savings, name: 'Rainy Day Savings', type: 'high_yield_savings', initialBalanceCents: 50000, interestRatePercent: 3.5,
-        interestStartDate: '2026-09-06', interestRateHistory: [{ effectiveDate: '2026-09-06', ratePercent: 3.5 }], notes: 'Opening balance on 2026-09-06; no historical interest credits supplied' },
+      { id: checking, name: 'Capital One 360 Checking', type: 'checking', initialBalanceCents: 18000, interestRatePercent: 0, interestStartDate: '2026-09-06', interestRateHistory: [{ effectiveDate: '2026-09-06', ratePercent: 0 }], notes: 'Opening balance on 2026-09-06' },
+      { id: savings, name: 'Capital One 360 Performance Savings', type: 'high_yield_savings', initialBalanceCents: 50000, interestRatePercent: 3.5,
+        interestStartDate: '2026-09-06', interestRateHistory: [{ effectiveDate: '2026-09-06', ratePercent: 3.5 }], notes: 'Opening balance on 2026-09-06; simulated 3.5% APY for fictional study data, not a current bank rate; no historical interest credits supplied' },
     ], categories, paychecks, allocations, transactions: [...expenses, ...gigs, ...transfers, ...reminders],
     goals: [{ id: 'jordan:goal:emergency', name: 'Emergency Fund', targetCents: 100000, initialSavedCents: 0 }],
     contributions: [{ id: 'jordan:reservation:emergency', goalId: 'jordan:goal:emergency', accountId: savings, amountCents: 12000, date: STUDY_DATE, status: 'pending', note: 'Reserved from existing savings; no bank transfer' }],

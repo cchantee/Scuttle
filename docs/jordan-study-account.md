@@ -69,3 +69,10 @@ No new database migration is required: the existing v2 JSON snapshot schema supp
 5. Repeat the reset and verification before **each** interface and each participant.
 
 All three interfaces share the same user row, so switching an interface alone does not reset it. Revision increments reject writes from stale sessions. A reset does not sign Jordan out, alter Supabase Auth, touch unrelated users, or restore authentication metadata. If a network error leaves the reset outcome uncertain, run `verify-live` or repeat the confirmed reset before testing.
+
+Jordan’s account names are **Capital One 360 Checking** ($245) and **Capital One 360 Performance Savings** ($680; $560 available after the $120 reservation). The savings **3.5% APY is simulated for the fictional study**, not a claim about Capital One’s current rate. Account IDs and all financial amounts remain unchanged.
+
+When a new current paycheck is received, older received paycheck budgets are archived automatically; their allocations and spending history are retained. Planned income does not close the current budget, and backdated income does not replace a later active budget. Expenses automatically match an active category allocation and default to its paycheck’s associated account (or its current holding account after a transfer). The account field stays visible and editable; manual overrides survive category/paycheck changes. Without a linked paycheck, an existing checking/cash account is used or the form asks for an account. One expense updates both the budget and account ledger exactly once. Expenses and transfers that would overdraw any affected cash account at any historical event are rejected atomically; budget categories may still be negative.
+
+### Sign-out after reset
+Reset also changes Jordan’s admin-owned session reset marker. Updated interfaces sign Jordan out within 15 seconds while online, or when the app returns to the foreground. Offline devices sign out once they reconnect. Credentials and account identity remain unchanged; a new sign-in starts the next participant session. No database migration is needed.

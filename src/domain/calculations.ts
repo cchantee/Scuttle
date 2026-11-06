@@ -1,3 +1,4 @@
+import { committedForAccount, goalFundsHeld, goalHoldingAccount } from './goalFunds';
 import { AppData, BudgetAllocation, Paycheck, SavingsGoal, SubscriptionFrequency, Transaction, VirtualAccount } from './models';
 import { normalizeDateInput } from './date';
 
@@ -61,7 +62,7 @@ export const pendingForGoal = (data: AppData, goalId: string) => data.contributi
 /** Spendable balance after pending goal holds. Credit limits are not tracked. */
 export const availableAccountBalance = (data: AppData, account: VirtualAccount) => account.type === 'credit_card'
   ? null
-  : accountBalance(data, account) - pendingForAccount(data, account.id);
+  : accountBalance(data, account) - committedForAccount(data, account.id);
 export const goalSummary = (data: AppData, goal: SavingsGoal) => {
   const savedCents = goalSaved(data, goal.id);
   return {
@@ -127,10 +128,13 @@ export function validateTransaction(data: AppData, tx: Transaction): string | nu
   }
   if (tx.accountId && !data.accounts.some(x => x.id === tx.accountId)) return 'Selected account does not exist.';
   if (tx.goalContributionId) {
+    const oldMove = data.transactions.find(t => t.id === tx.id && t.goalContributionId && t.type === 'transfer' && data.contributions.some(c => c.id === t.goalContributionId && c.transactionId === t.id));
+    if (oldMove && (oldMove.amountCents !== tx.amountCents || oldMove.accountId !== tx.accountId || oldMove.toAccountId !== tx.toAccountId || tx.type !== 'transfer')) return 'Move goal money from its goal page rather than changing a recorded transfer.';
     const contribution = data.contributions.find(item => item.id === tx.goalContributionId);
-    if (!contribution || (contribution.status !== 'pending' && contribution.transactionId !== tx.id)) return 'This pending goal contribution is not available to settle.';
+    if (!contribution || (!goalFundsHeld(data, contribution) && contribution.transactionId !== tx.id)) return 'This pending goal contribution is not available to settle.';
     if (tx.type !== 'transfer' && !(contribution.status === 'posted' && contribution.transactionId === tx.id && tx.type === 'expense')) return 'A pending goal contribution can only be completed in place or transferred to another account.';
-    if (tx.amountCents !== contribution.amountCents || tx.accountId !== contribution.accountId) return 'The transaction amount and source account must match the pending goal contribution.';
+    if (tx.type === 'transfer' && !oldMove && (tx.accountId !== goalHoldingAccount(data, contribution) || tx.amountCents !== contribution.amountCents)) return 'Move the contribution from the account currently holding it.';
+    if (tx.amountCents !== contribution.amountCents || (!oldMove && tx.accountId !== goalHoldingAccount(data, contribution))) return 'The transaction amount and source account must match the pending goal contribution.';
   }
   if (tx.type === 'transfer') {
     if (!tx.accountId || !tx.toAccountId || tx.accountId === tx.toAccountId) return 'Choose two different accounts for a transfer.';

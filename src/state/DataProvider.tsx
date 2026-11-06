@@ -1,3 +1,5 @@
+import { AppState } from 'react-native';
+import { goalFundsHeld } from '../domain/goalFunds';
 import { applyPaycheckOperation, PaycheckOperation } from '../domain/paycheckOperations';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { AppData, emptyData, PaydayFrequency, Transaction, newId } from '../domain/models';
@@ -60,6 +62,30 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     });
     return () => { active = false; listener.subscription.unsubscribe(); };
   }, []);
+
+  // Reset markers are admin-owned metadata, separate from the financial fixture.
+  useEffect(() => {
+    if (!supabase || authUser?.email?.toLowerCase() !== 'jordan.taylor@example.com') return;
+    const client = supabase;
+    let active = true, checking = false;
+    const baseline = client.auth.getSession().then(({ data }) => data.session?.user.app_metadata?.scuttle_study_reset);
+    const checkReset = async () => {
+      if (!active || checking) return;
+      checking = true;
+      try {
+        const original = await baseline;
+        const { data: result, error } = await client.auth.getUser();
+        if (active && !error && result.user && result.user.app_metadata?.scuttle_study_reset !== original) {
+          await client.auth.signOut({ scope: 'local' });
+          if (active) { setAuthUser(null); dataRef.current = emptyData(); setData(emptyData()); }
+        }
+      } catch { /* Retry when connectivity returns. */ } finally { checking = false; }
+    };
+    void checkReset();
+    const timer = setInterval(() => void checkReset(), 15000);
+    const foreground = AppState.addEventListener('change', state => { if (state === 'active') void checkReset(); });
+    return () => { active = false; clearInterval(timer); foreground.remove(); };
+  }, [authUser?.id]);
 
   useEffect(() => {
     let active = true;
@@ -161,7 +187,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const settleGoalContribution = useCallback((contributionId: string, transaction: Transaction) => enqueue(async () => {
     const current = dataRef.current;
     const contribution = current.contributions.find(item => item.id === contributionId);
-    if (!contribution || contribution.status !== 'pending') { setError('This goal contribution is no longer pending.'); return false; }
+    if (!contribution || !goalFundsHeld(current, contribution)) { setError('This goal contribution is no longer pending.'); return false; }
     const result = transferGoalContribution(current, contributionId, transaction);
     if (result.error) { setError(result.error); return false; }
     return commit(result.data);

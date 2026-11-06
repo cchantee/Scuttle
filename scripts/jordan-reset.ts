@@ -4,9 +4,9 @@ import { buildJordanTaylorSnapshot, verifyJordanTaylorStartingData } from '../sr
 
 export const RESET_TITLE = 'Reset Jordan Taylor Study Data?';
 export const RESET_WARNING = 'This will erase all changes made during the current testing session and restore Jordan Taylor\'s original financial data. This action cannot be undone.';
-export const RESET_SUCCESS = "Jordan Taylor's study data has been restored. The account is ready for the next testing session.";
+export const RESET_SUCCESS = "Jordan Taylor's study data has been restored. Open Jordan sessions will sign out when online (within 15 seconds). The account is ready for the next testing session.";
 
-// Server-side tooling only: never imported by the Expo app. Auth access is read-only.
+// Server-side tooling only: never imported by the Expo app. Only reset metadata changes; credentials and identity are preserved.
 async function findJordanId(supabase: SupabaseClient): Promise<string> {
   for (let page = 1; ; page++) {
     const { data, error } = await supabase.auth.admin.listUsers({ page, perPage: 100 });
@@ -49,7 +49,12 @@ export async function resetJordan(supabase: SupabaseClient) {
   if (error) throw error;
   if (saved?.length !== 1) throw new Error('Concurrent save detected. Close study sessions and retry reset.');
   if (saved[0].user_id !== userId || saved[0].revision !== current.revision + 1) throw new Error('Reset could not verify the saved owner and revision.');
-  return verifyStoredSnapshot(userId, saved[0].data);
+  const verified = verifyStoredSnapshot(userId, saved[0].data);
+  const { error: signOutError } = await supabase.auth.admin.updateUserById(userId, {
+    app_metadata: { scuttle_study_reset: crypto.randomUUID() },
+  });
+  if (signOutError) throw new Error(`Financial data was reset, but session sign-out could not be requested: ${signOutError.message}`);
+  return verified;
 }
 
 export async function confirmAndResetJordan(
