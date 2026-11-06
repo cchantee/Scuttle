@@ -8,7 +8,8 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "qa:backend": "npm run typecheck && npm test",
-    "study:jordan": "node scripts/jordan-study-account.mjs"
+    "study:jordan": "vite-node scripts/jordan-study-account.ts",
+    "test:interface": "node scripts/interface-launcher.mjs"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",

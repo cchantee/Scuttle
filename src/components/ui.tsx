@@ -123,9 +123,10 @@ export const Field = ({ label, value, onChangeText, placeholder, keyboardType = 
 };
 
 export const DateField = ({ label, value, onChangeText, optional = false }: { label: string; value: string; onChangeText: (value: string) => void; optional?: boolean }) => {
+  const { data } = useData();
   const [open, setOpen] = React.useState(false);
   const [visibleMonth, setVisibleMonth] = React.useState(() => {
-    const selected = normalizeDateInput(value) ?? normalizeDateInput(todayDateInput())!;
+    const selected = normalizeDateInput(value) ?? normalizeDateInput(todayDateInput(data.user))!;
     const [year, month] = selected.split('-').map(Number);
     return new Date(year, month - 1, 1);
   });
@@ -140,7 +141,7 @@ export const DateField = ({ label, value, onChangeText, optional = false }: { la
   });
   const changeMonth = (amount: number) => setVisibleMonth(current => new Date(current.getFullYear(), current.getMonth() + amount, 1));
   const openCalendar = () => {
-    const iso = selected ?? normalizeDateInput(todayDateInput())!;
+    const iso = selected ?? normalizeDateInput(todayDateInput(data.user))!;
     const [selectedYear, selectedMonth] = iso.split('-').map(Number);
     setVisibleMonth(new Date(selectedYear, selectedMonth - 1, 1));
     setOpen(true);
@@ -170,7 +171,7 @@ export const DateField = ({ label, value, onChangeText, optional = false }: { la
             return <View key={index} style={{ width: `${100 / 7}%`, alignItems: 'center', paddingVertical: 2 }}>{day ? <Pressable accessibilityRole="button" accessibilityState={{ selected: active }} onPress={() => chooseDay(day)} style={({ pressed }) => ({ width: 36, height: 36, alignItems: 'center', justifyContent: 'center', borderRadius: 18, backgroundColor: active ? '#8FB3C0' : pressed ? '#D9DFE6' : 'transparent' })}><Text style={{ color: ink, fontWeight: active ? '700' : '400' }}>{day}</Text></Pressable> : <View style={{ width: 36, height: 36 }} />}</View>;
           })}</View>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Pressable onPress={() => { onChangeText(todayDateInput()); setOpen(false); }}><Text style={{ color: ink, fontWeight: '600' }}>Today</Text></Pressable>
+            <Pressable onPress={() => { onChangeText(todayDateInput(data.user)); setOpen(false); }}><Text style={{ color: ink, fontWeight: '600' }}>Today</Text></Pressable>
             <Pressable onPress={() => setOpen(false)}><Text style={{ color: ink }}>Done</Text></Pressable>
           </View>
         </Pressable>

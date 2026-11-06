@@ -24,7 +24,7 @@ export default function Dashboard() {
   const openCommitments = active.reduce((sum, item) => sum + Math.max(0, allocationSummary(data, item).remainingCents), 0);
   const safe = Math.max(0, cash.availableCashCents - openCommitments);
   const firstName = (authUser?.displayName || data.user.displayName || 'there').trim().split(/\s+/)[0];
-  const radar = useMemo(() => data.transactions.filter(t => t.type === 'subscription').map(t => ({ t, due: nextSubscriptionDue(t, todayISODate()) })).filter((row): row is { t: typeof data.transactions[number]; due: string } => Boolean(row.due)).sort((a, b) => a.due.localeCompare(b.due)).slice(0, 2), [data.transactions]);
+  const radar = useMemo(() => data.transactions.filter(t => t.type === 'subscription').map(t => ({ t, due: nextSubscriptionDue(t, todayISODate(data.user)) })).filter((row): row is { t: typeof data.transactions[number]; due: string } => Boolean(row.due)).sort((a, b) => a.due.localeCompare(b.due)).slice(0, 2), [data.transactions, data.user.studySnapshotDate]);
   const budgetRows = active.sort((a, b) => allocationSummary(data, a).remainingCents - allocationSummary(data, b).remainingCents).slice(0, 3);
   return <Page title={`Good morning, ${firstName} 👋`} headerRight={<Pressable accessibilityRole="button" onPress={() => router.push('/more')} style={{ minWidth: 44, minHeight: 44, justifyContent: 'center', alignItems: 'center' }}><Text style={{ fontSize: 22 }}>☰</Text></Pressable>}>
     <Feedback />

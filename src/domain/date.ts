@@ -24,12 +24,13 @@ export function formatDateDisplay(value: string): string {
   return iso ? formatDateInput(iso) : value;
 }
 
-export function todayISODate(): string {
+export function todayISODate(user?: { studySnapshotDate?: string }): string {
+  if (user?.studySnapshotDate && normalizeDateInput(user.studySnapshotDate)) return normalizeDateInput(user.studySnapshotDate)!;
   const now = new Date();
   return `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}-${now.getDate().toString().padStart(2, '0')}`;
 }
 
-export function todayDateInput(): string { return formatDateInput(todayISODate()); }
+export function todayDateInput(user?: { studySnapshotDate?: string }): string { return formatDateInput(todayISODate(user)); }
 
 /** Return the next scheduled paycheck date on or after today, anchored to the user's first entered payday. */
 export function calculateNextPayday(anchorDate: string, today: string, frequency: 'monthly' | 'weekly' | 'biweekly' | 'custom', intervalDays?: number): string | null {

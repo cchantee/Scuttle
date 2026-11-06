@@ -24,7 +24,7 @@ export default function Paychecks() {
   const [savedId, setSavedId] = useState('');
   const [formOpen, setFormOpen] = useState(false);
   const [amount, setAmount] = useState('');
-  const [date, setDate] = useState(todayDateInput());
+  const [date, setDate] = useState(todayDateInput(data.user));
   const [source, setSource] = useState('');
   const [notes, setNotes] = useState('');
   const [fundingMode, setFundingMode] = useState<'paycheck' | 'account' | ''>('');
@@ -37,7 +37,7 @@ export default function Paychecks() {
     setStatus(params.receive === '1' && paycheck.status === 'planned' ? 'received' : paycheck.status ?? 'received'); setAmount((paycheck.amountCents / 100).toFixed(2)); setDate(formatDateInput(paycheck.receivedAt)); setSource(paycheck.source ?? ''); setNotes(paycheck.notes ?? ''); setAccountId(paycheck.remainingAccountId ?? paycheck.accountId ?? ''); setFundingMode(params.receive === '1' || paycheck.accountId ? 'account' : 'paycheck');
     crud.setEditingId(paycheck.id); setFormOpen(true); initializedId.current = paycheck.id;
   }, [params.paycheckId, data.paychecks]);
-  const reset = () => { setStatus('received'); setAmount(''); setDate(todayDateInput()); setSource(''); setNotes(''); setAccountId(''); setFundingMode(''); crud.cancel(); setFormOpen(false); };
+  const reset = () => { setStatus('received'); setAmount(''); setDate(todayDateInput(data.user)); setSource(''); setNotes(''); setAccountId(''); setFundingMode(''); crud.cancel(); setFormOpen(false); };
   const submit = async () => {
     if (saving.current) return;
     saving.current = true;

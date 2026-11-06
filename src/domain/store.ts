@@ -1,3 +1,7 @@
+import { committedForAccount, goalFundsHeld, goalHoldingAccount } from './goalFunds';
+import { cashLedgerError } from './accountLedger';
+import { expenseAllocation, payingAccountSelection } from './transactionAccounts';
+import { startReceivedBudget } from './paycheckBudget';
 import { AppData, BudgetAllocation, BudgetCategory, Id, Paycheck, SavingsContribution, SavingsGoal, Transaction, VirtualAccount } from './models';
 import { accountBalance, allocatedForPaycheck, spentForAllocation, validateAllocation, validateTransaction } from './calculations';
 import { todayISODate } from './date';
@@ -32,13 +36,14 @@ export function upsertRecord<C extends CollectionName>(data: AppData, collection
     if (p.accountId && !updated.accounts.some(account => account.id === p.accountId)) return { data, error: 'The selected deposit account does not exist.' };
     if (p.remainingAccountId && !updated.accounts.some(account => account.id === p.remainingAccountId)) return { data, error: 'The account holding the remaining paycheck funds does not exist.' };
     if (p.accountCreditCents !== undefined && (!Number.isSafeInteger(p.accountCreditCents) || p.accountCreditCents < 0)) return { data, error: 'Paycheck account credit must be a non-negative amount.' };
+    if (p.status !== 'planned' && (!previous || previous.status === 'planned')) updated.paychecks = startReceivedBudget(updated.paychecks, p.id);
   }
   if (collection === 'categories' && !(record as BudgetCategory).name.trim()) return { data, error: 'Category name is required.' };
   if (collection === 'accounts') {
     const supplied = record as VirtualAccount;
     const previous = data.accounts.find(item => item.id === supplied.id);
     const rate = supplied.interestRatePercent ?? 0;
-    const today = todayISODate();
+    const today = todayISODate(data.user);
     const interestStartDate = previous?.interestStartDate ?? supplied.interestStartDate ?? today;
     let history = previous?.interestRateHistory ?? supplied.interestRateHistory ?? [{ effectiveDate: interestStartDate, ratePercent: previous?.interestRatePercent ?? rate }];
     const previousRate = previous?.interestRatePercent ?? 0;
@@ -81,15 +86,22 @@ export function upsertRecord<C extends CollectionName>(data: AppData, collection
       const previousAllocation = previous?.categoryId === tx.categoryId && previous.allocationId
         ? updated.allocations.find(item => item.id === previous.allocationId)
         : undefined;
-      const activeAllocation = updated.allocations
-        .filter(item => item.categoryId === tx.categoryId && !updated.paychecks.find(paycheck => paycheck.id === item.paycheckId)?.budgetArchived && updated.paychecks.find(paycheck => paycheck.id === item.paycheckId)?.status !== 'planned')
-        .sort((a, b) => (updated.paychecks.find(p => p.id === b.paycheckId)?.receivedAt ?? '').localeCompare(updated.paychecks.find(p => p.id === a.paycheckId)?.receivedAt ?? ''))[0];
+      const activeAllocation = expenseAllocation(updated, tx);
       const allocation = previousAllocation ?? activeAllocation;
       if (allocation) tx = { ...tx, allocationId: allocation.id };
+    }
+    if (tx.type === 'expense' && !tx.accountId && !data.transactions.some(item => item.id === tx.id)) {
+      tx = { ...tx, accountId: payingAccountSelection(updated, tx, { accountId: '', manual: false }) || undefined };
     }
     updated.transactions = updated.transactions.map(item => item.id === tx.id ? tx : item);
     const error = validateTransaction(updated, tx);
     if (error) return { data, error };
+    if (tx.type === 'transfer' && tx.goalContributionId && !data.transactions.some(t => t.id === tx.id)) updated.contributions = updated.contributions.map(c => c.id === tx.goalContributionId ? { ...c, accountId: tx.toAccountId, transactionId: tx.id } : c);
+    if (tx.type === 'expense' || tx.type === 'transfer') {
+      const previous = data.transactions.find(item => item.id === tx.id);
+      const ledgerError = cashLedgerError(updated, [tx.accountId, tx.toAccountId, previous?.accountId, previous?.toAccountId]);
+      if (ledgerError) return { data, error: ledgerError };
+    }
     if (tx.interestPosting) {
       const account = updated.accounts.find(item => item.id === tx.accountId);
       const isSavingsCredit = tx.interestPosting === 'savings_credit' && tx.type === 'income' && (account?.type === 'savings' || account?.type === 'high_yield_savings');
@@ -113,12 +125,12 @@ export function upsertRecord<C extends CollectionName>(data: AppData, collection
     if (contribution.status && data.accounts.find(x => x.id === contribution.accountId)?.type === 'credit_card') return { data, error: 'Savings goals must be funded from a cash or savings account, not credit card debt.' };
     if (contribution.status === 'posted') {
       const linkedTransaction = data.transactions.find(x => x.id === contribution.transactionId);
-      if (!linkedTransaction || linkedTransaction.goalContributionId !== contribution.id || linkedTransaction.amountCents !== contribution.amountCents || linkedTransaction.accountId !== contribution.accountId || (linkedTransaction.type !== 'transfer' && linkedTransaction.type !== 'expense')) return { data, error: 'A posted contribution must be linked to its matching historical transaction.' };
+      if (!linkedTransaction || linkedTransaction.goalContributionId !== contribution.id || linkedTransaction.amountCents !== contribution.amountCents || (linkedTransaction.type === 'transfer' ? ![linkedTransaction.accountId, linkedTransaction.toAccountId].includes(contribution.accountId) : linkedTransaction.accountId !== contribution.accountId) || (linkedTransaction.type !== 'transfer' && linkedTransaction.type !== 'expense')) return { data, error: 'A posted contribution must be linked to its matching historical transaction.' };
     }
-    if (contribution.status === 'pending' && contribution.accountId) {
+    if (goalFundsHeld(updated, contribution) && contribution.accountId) {
       const account = data.accounts.find(x => x.id === contribution.accountId)!;
       if (account.type !== 'credit_card') {
-        const otherHolds = data.contributions.filter(x => x.accountId === account.id && x.status === 'pending' && x.id !== contribution.id).reduce((sum, x) => sum + x.amountCents, 0);
+        const otherHolds = committedForAccount(data, account.id, contribution.id);
         const posted = accountBalance(data, account);
         if (contribution.amountCents > posted - otherHolds) return { data, error: 'The funding account does not have enough available balance for this pending amount.' };
       }
@@ -126,7 +138,7 @@ export function upsertRecord<C extends CollectionName>(data: AppData, collection
     const previous = data.contributions.find(x => x.id === contribution.id);
     if (previous?.transactionId && contribution.transactionId !== previous.transactionId) return { data, error: 'A settled contribution cannot be unlinked from its transaction.' };
     if (previous?.transactionId && (previous.amountCents !== contribution.amountCents || previous.accountId !== contribution.accountId)) return { data, error: 'A contribution linked to a posted transaction cannot change its amount or funding account.' };
-    if (contribution.status === 'designated' && contribution.transactionId) return { data, error: 'A completed same-account designation cannot have a transfer transaction.' };
+    if (contribution.status === 'designated' && contribution.transactionId && !data.transactions.some(t => t.id === contribution.transactionId && t.type === 'transfer' && t.goalContributionId === contribution.id)) return { data, error: 'Saved funds must remain linked to their valid goal move.' };
   }
   return { data: updated };
 }
@@ -154,25 +166,28 @@ export function removeRecord(data: AppData, collection: CollectionName, id: Id):
   let updated = { ...data, [collection]: next } as AppData;
   if (collection === 'transactions') {
     const removed = data.transactions.find(item => item.id === id);
-    if (removed?.goalContributionId) updated = { ...updated, contributions: updated.contributions.map(item => item.id === removed.goalContributionId ? { ...item, status: 'pending', transactionId: undefined } : item) };
+    if (removed?.goalContributionId) updated = { ...updated, contributions: updated.contributions.map(item => item.id === removed.goalContributionId && item.transactionId === removed.id ? { ...item, accountId: removed.accountId, status: removed.type === 'transfer' ? item.status === 'posted' ? 'designated' : item.status : 'pending', transactionId: undefined } : item) };
     if (removed?.paycheckId && removed.toAccountId) updated = { ...updated, paychecks: updated.paychecks.map(paycheck => paycheck.id === removed.paycheckId && paycheck.remainingAccountId === removed.toAccountId ? { ...paycheck, remainingAccountId: removed.accountId } : paycheck) };
   }
+  if (collection === 'transactions') { const removed = data.transactions.find(t => t.id === id); const error = cashLedgerError(updated,[removed?.accountId,removed?.toAccountId]); if (error) return {data,error}; }
   return { data: updated } as StoreResult;
 }
 
 export function completeGoalContributionInAccount(data: AppData, id: Id): StoreResult {
-  const contribution = data.contributions.find(item => item.id === id);
-  if (!contribution || contribution.status !== 'pending') return { data, error: 'This contribution is no longer pending.' };
-  return upsertRecord(data, 'contributions', { ...contribution, status: 'designated' });
+  const contribution = data.contributions.find(c => c.id === id);
+  if (!contribution || !goalFundsHeld(data,contribution)) return {data,error:'This goal contribution is no longer available.'};
+  if (contribution.status !== 'pending') return {data};
+  return upsertRecord(data,'contributions',{...contribution,accountId:goalHoldingAccount(data,contribution),status:'designated'});
 }
 
 export function transferGoalContribution(data: AppData, id: Id, transaction: Transaction): StoreResult {
-  const contribution = data.contributions.find(item => item.id === id);
-  if (!contribution || contribution.status !== 'pending') return { data, error: 'This contribution is no longer pending.' };
-  if (transaction.type !== 'transfer' || transaction.accountId !== contribution.accountId || transaction.amountCents !== contribution.amountCents) return { data, error: 'Transfer amount and source account must match the pending contribution.' };
-  const txResult = upsertRecord(data, 'transactions', { ...transaction, goalContributionId: contribution.id });
-  if (txResult.error) return txResult;
-  return upsertRecord(txResult.data, 'contributions', { ...contribution, status: 'posted', transactionId: transaction.id });
+  const contribution = data.contributions.find(c => c.id === id);
+  const existing = data.transactions.find(t => t.id === transaction.id);
+  if (existing) return existing.goalContributionId === id && existing.type === 'transfer' && existing.accountId === transaction.accountId && existing.toAccountId === transaction.toAccountId && existing.amountCents === transaction.amountCents ? {data} : {data,error:'This transaction identifier is already in use.'};
+  if (!contribution || !goalFundsHeld(data,contribution)) return {data,error:'This goal contribution is no longer available.'};
+  if (transaction.type !== 'transfer' || transaction.accountId !== goalHoldingAccount(data,contribution) || transaction.amountCents !== contribution.amountCents) return {data,error:'Move the full contribution from the account currently holding it.'};
+  if (!transaction.toAccountId || transaction.toAccountId === transaction.accountId || !data.accounts.some(a => a.id === transaction.toAccountId && a.type !== 'credit_card')) return {data,error:'Choose a different cash or savings account.'};
+  return upsertRecord(data,'transactions',{...transaction,goalContributionId:id});
 }
 
 function periodEnd(period: string) {

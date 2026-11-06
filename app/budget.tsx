@@ -26,8 +26,8 @@ export default function Budget() {
   const [categoryId, setCategory] = useState('');
   const [amount, setAmount] = useState('');
   const initializedAllocation = useRef('');
-  const upcomingPayday = data.user.nextPayday && data.user.paydayFrequency ? calculateNextPayday(data.user.nextPayday, todayISODate(), data.user.paydayFrequency, data.user.paydayIntervalDays) : data.user.nextPayday;
-  const upcomingSubscriptions = data.transactions.filter(item => item.type === 'subscription').map(item => ({ item, dueDate: nextSubscriptionDue(item, todayISODate()) })).filter((row): row is { item: typeof data.transactions[number]; dueDate: string } => !!row.dueDate && (!upcomingPayday || row.dueDate <= upcomingPayday)).sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+  const upcomingPayday = data.user.nextPayday && data.user.paydayFrequency ? calculateNextPayday(data.user.nextPayday, todayISODate(data.user), data.user.paydayFrequency, data.user.paydayIntervalDays) : data.user.nextPayday;
+  const upcomingSubscriptions = data.transactions.filter(item => item.type === 'subscription').map(item => ({ item, dueDate: nextSubscriptionDue(item, todayISODate(data.user)) })).filter((row): row is { item: typeof data.transactions[number]; dueDate: string } => !!row.dueDate && (!upcomingPayday || row.dueDate <= upcomingPayday)).sort((a, b) => a.dueDate.localeCompare(b.dueDate));
   const planPaycheck = [...data.paychecks].filter(item => !item.budgetArchived).sort((a, b) => b.receivedAt.localeCompare(a.receivedAt))[0];
 
   useEffect(() => {
@@ -134,5 +134,5 @@ export default function Budget() {
 function AllocationLine({ allocation, data, router, onEdit, onDelete }: { allocation: (typeof data.allocations)[number]; data: ReturnType<typeof useData>['data']; router: ReturnType<typeof useRouter>; onEdit: () => void; onDelete: () => void }) {
   const summary = allocationSummary(data, allocation);
   const category = data.categories.find(item => item.id === allocation.categoryId);
-  return <RecordLine title={category?.name ?? 'Unknown category'} detail={`${formatMoney(summary.allocatedCents)} allocated · ${formatMoney(summary.spentCents)} spent · ${formatMoney(summary.remainingCents)} left`} onView={() => router.push({ pathname: '/allocation/[id]', params: { id: allocation.id } })} onEdit={onEdit} onDelete={onDelete} />;
+  return <RecordLine title={category?.name ?? 'Unknown category'} detail={`${formatMoney(summary.allocatedCents)} allocated · ${formatMoney(summary.spentCents)} spent · ${formatMoney(summary.remainingCents)} ${summary.remainingCents < 0 ? 'remaining · Over budget' : 'left'}`} onView={() => router.push({ pathname: '/allocation/[id]', params: { id: allocation.id } })} onEdit={onEdit} onDelete={onDelete} />;
 }

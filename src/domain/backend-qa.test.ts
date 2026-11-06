@@ -63,7 +63,7 @@ describe('Scuttle backend QA persona: record validation and integrity', () => {
     const summary = savingsGoalSummary(data);
     expect(summary).toEqual({ savedCents: 30000, targetCents: 200000, progressPercent: 15 });
     expect(data.accounts.map(account => accountBalance(data, account))).toEqual(before);
-    expect(cashAccountSummary(data)).toEqual({ totalCashCents: 250000, availableCashCents: 210000, creditCardDebtCents: 40000 });
+    expect(cashAccountSummary(data)).toEqual({ totalCashCents: 250000, availableCashCents: 190000, creditCardDebtCents: 40000 });
   });
 
   it('blocks deletion of accounts, goals, and contributions with dependent history', () => {

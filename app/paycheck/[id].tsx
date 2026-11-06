@@ -61,7 +61,7 @@ export default function PaycheckDetail() {
         const name = data.categories.find(c => c.id === a.categoryId)?.name ?? 'Category';
         return <View key={a.id} style={{ borderBottomWidth: 1, borderColor: '#E9E7E2' }}>
           <Pressable accessibilityRole="button" accessibilityLabel={`Open ${name} allocation`} onPress={() => router.push({ pathname: '/allocation/[id]', params: { id: a.id } })} style={{ minHeight: 68, flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10 }}>
-            <IconTile name={categoryIcon(name)} tint="#DCE7DA" /><View style={{ flex: 1, gap: 5 }}><Text style={{ fontSize: 18 }}>{name}</Text><Text style={{ fontSize: 13, color: '#69777A' }}>{formatMoney(summary.remainingCents)} left</Text></View><View style={{ alignItems: 'flex-end', gap: 5 }}><Text role="money" style={{ fontSize: 21 }}>{formatMoney(a.amountCents)}</Text><Text style={{ color: '#69777A', fontSize: 12 }}>{a.amountCents ? Math.round(summary.spentCents / a.amountCents * 100) : 0}% used</Text></View><Text>›</Text>
+            <IconTile name={categoryIcon(name)} tint="#DCE7DA" /><View style={{ flex: 1, gap: 5 }}><Text style={{ fontSize: 18 }}>{name}</Text><Text style={{ fontSize: 13, color: '#69777A' }}>{formatMoney(summary.remainingCents)} {summary.remainingCents < 0 ? 'remaining · Over budget' : 'left'}</Text></View><View style={{ alignItems: 'flex-end', gap: 5 }}><Text role="money" style={{ fontSize: 21 }}>{formatMoney(a.amountCents)}</Text><Text style={{ color: '#69777A', fontSize: 12 }}>{a.amountCents ? Math.round(summary.spentCents / a.amountCents * 100) : 0}% used</Text></View><Text>›</Text>
           </Pressable>
         </View>;
       })}
