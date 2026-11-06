@@ -1,46 +1,44 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Pressable, View } from 'react-native';
-import { Redirect, useRouter } from 'expo-router';
-import { Action, Card, Feedback, Page, ProgressBar, SectionTitle } from '../src/components/ui';
+import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
+import { Action, Card, Feedback, Field, Page, ProgressBar, SectionTitle } from '../src/components/ui';
 import { Text } from '../src/components/typography';
-import { CompanionCard, HarborHero } from '../src/components/collaborative';
-import { IconTile, categoryIcon } from '../src/components/icons';
-import { allocationSummary, cashAccountSummary, goalSummary, nextSubscriptionDue, unallocatedForPaycheck } from '../src/domain/calculations';
+import { HarborBalance } from '../src/components/collaborative';
+import { LoadingRecords } from '../src/components/LoadingRecords';
+import { Icon, IconTile, categoryIcon } from '../src/components/icons';
+import { TourHighlight, useWalkthrough } from '../src/components/walkthrough';
+import { activeBudgetAllocations, allocatedForPaycheck, allocationSummary, cashAccountSummary, nextSubscriptionDue, unallocatedForPaycheck } from '../src/domain/calculations';
+import { currentPaycheck, paycheckDestination } from '../src/domain/navigation';
+import { searchScuttle } from '../src/domain/scuttleSearch';
 import { formatMoney } from '../src/domain/money';
 import { formatDateDisplay, todayISODate } from '../src/domain/date';
 import { useData } from '../src/state/DataProvider';
 import { colors } from '../src/design/theme';
 
-export default function Dashboard() {
-  const { data, loading, authConfigured, authLoading, authUser } = useData();
-  const router = useRouter();
-  if (authConfigured && authLoading) return <Page title="Scuttle" showTabs={false}><Text>Loading…</Text></Page>;
-  if (authConfigured && !authUser) return <Redirect href="/welcome" />;
-  if (loading) return <Page title="Scuttle" showTabs={false}><Text>Loading your harbor…</Text></Page>;
-  const latest = [...data.paychecks].filter(p => !p.budgetArchived && p.status !== 'planned').sort((a, b) => b.receivedAt.localeCompare(a.receivedAt))[0];
-  const planned = [...data.paychecks].filter(p => p.status === 'planned').sort((a, b) => a.receivedAt.localeCompare(b.receivedAt))[0];
-  const cash = cashAccountSummary(data);
-  const active = data.allocations.filter(a => { const p = data.paychecks.find(item => item.id === a.paycheckId); return p && !p.budgetArchived && p.status !== 'planned'; });
-  const openCommitments = active.reduce((sum, item) => sum + Math.max(0, allocationSummary(data, item).remainingCents), 0);
-  const safe = Math.max(0, cash.availableCashCents - openCommitments);
-  const firstName = (authUser?.displayName || data.user.displayName || 'there').trim().split(/\s+/)[0];
-  const radar = useMemo(() => data.transactions.filter(t => t.type === 'subscription').map(t => ({ t, due: nextSubscriptionDue(t, todayISODate(data.user)) })).filter((row): row is { t: typeof data.transactions[number]; due: string } => Boolean(row.due)).sort((a, b) => a.due.localeCompare(b.due)).slice(0, 2), [data.transactions, data.user.studySnapshotDate]);
-  const budgetRows = active.sort((a, b) => allocationSummary(data, a).remainingCents - allocationSummary(data, b).remainingCents).slice(0, 3);
-  return <Page title={`Good morning, ${firstName} 👋`} headerRight={<Pressable accessibilityRole="button" onPress={() => router.push('/more')} style={{ minWidth: 44, minHeight: 44, justifyContent: 'center', alignItems: 'center' }}><Text style={{ fontSize: 22 }}>☰</Text></Pressable>}>
-    <Feedback />
-    <HarborHero safeToSpend={formatMoney(safe)} detail={`${formatMoney(cash.totalCashCents)} in accounts · ${formatMoney(openCommitments)} already spoken for`} action={{ label: latest ? 'Plan this paycheck' : 'Add a paycheck', onPress: () => router.push(latest ? { pathname: '/paycheck/[id]', params: { id: latest.id } } : { pathname: '/paychecks', params: { add: '1' } }) }} />
-    <View style={{ flexDirection: 'row', gap: 8 }}><Metric label="In Accounts" value={formatMoney(cash.totalCashCents)} /><Metric label="Committed" value={formatMoney(openCommitments)} /></View>
-    <CompanionCard title="Your next best step" message={latest ? `${formatMoney(unallocatedForPaycheck(data, latest.id))} is still waiting for a job. Start with the essentials, then decide what is next.` : 'Add your next paycheck when you are ready, and we’ll make a simple plan together.'} action={{ label: 'See planning tips', onPress: () => router.push('/insights') }} />
-    <SectionTitle>On Your Radar</SectionTitle>
-    <Card style={{ padding: 0, gap: 0 }}>{radar.length ? radar.map(({ t, due }, index) => <Pressable key={t.id} accessibilityRole="button" onPress={() => router.push('/budget')} style={{ minHeight: 66, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 10, borderBottomWidth: index === radar.length - 1 ? 0 : 1, borderColor: colors.border }}><IconTile name="calendar" tint={colors.shell} /><View style={{ flex: 1 }}><Text style={{ fontWeight: '700' }}>{t.description}</Text><Text style={{ fontSize: 12, color: colors.muted }}>Due {formatDateDisplay(due)} · {data.allocations.some(a => a.subscriptionId === t.id) ? 'planned' : 'needs a plan'}</Text></View><Text role="money">{formatMoney(t.amountCents)}</Text></Pressable>) : <Text style={{ padding: 14, color: colors.muted }}>Nothing urgent is coming up. Nice breathing room.</Text>}</Card>
-    <SectionTitle right={<Action label="View budget" variant="text" onPress={() => router.push('/budget')} />}>This Paycheck</SectionTitle>
-    {latest ? <Pressable accessibilityRole="button" onPress={() => router.push({ pathname: '/paycheck/[id]', params: { id: latest.id } })}><Card><View style={{ flexDirection: 'row', justifyContent: 'space-between' }}><View><Text style={{ fontWeight: '700' }}>{latest.source || 'Latest paycheck'}</Text><Text style={{ color: colors.muted, fontSize: 13 }}>{formatDateDisplay(latest.receivedAt)}</Text></View><Text role="money" style={{ fontSize: 22 }}>{formatMoney(latest.amountCents)}</Text></View><ProgressBar value={latest.amountCents - unallocatedForPaycheck(data, latest.id)} max={latest.amountCents} color={colors.teal} /><Text style={{ color: colors.muted, fontSize: 13 }}>{formatMoney(unallocatedForPaycheck(data, latest.id))} still yours to assign</Text></Card></Pressable> : <Action label="Plan a paycheck" variant="primary" fullWidth onPress={() => router.push({ pathname: '/paychecks', params: { add: '1' } })} />}
-    {planned ? <Card style={{ backgroundColor: '#F5FBF8' }}><Text style={{ fontWeight: '700' }}>Next up · {formatDateDisplay(planned.receivedAt)}</Text><Text style={{ color: colors.muted }}>{formatMoney(planned.amountCents)} planned, not in account balances yet.</Text><Action label="Review planned paycheck" onPress={() => router.push({ pathname: '/paycheck/[id]', params: { id: planned.id } })} /></Card> : null}
-    <SectionTitle right={<Action label="All goals" variant="text" onPress={() => router.push('/goals')} />}>Making Progress</SectionTitle>
-    {data.goals.length ? data.goals.slice(0, 2).map(goal => { const summary = goalSummary(data, goal); return <Pressable key={goal.id} onPress={() => router.push({ pathname: '/goal/[id]', params: { id: goal.id } })}><Card style={{ gap: 7 }}><View style={{ flexDirection: 'row', justifyContent: 'space-between' }}><Text style={{ fontWeight: '700' }}>{goal.name}</Text><Text role="money">{summary.progressPercent.toFixed(0)}%</Text></View><ProgressBar value={summary.savedCents} max={goal.targetCents} color={colors.teal} /><Text style={{ color: colors.muted, fontSize: 12 }}>{formatMoney(summary.savedCents)} of {formatMoney(goal.targetCents)}</Text></Card></Pressable>; }) : <Action label="Create a savings goal" onPress={() => router.push('/goal/new')} />}
-    <SectionTitle right={<Action label="All categories" variant="text" onPress={() => router.push('/budget')} />}>Budget Check-in</SectionTitle>
-    {budgetRows.length ? budgetRows.map(row => { const summary = allocationSummary(data, row); const name = data.categories.find(c => c.id === row.categoryId)?.name ?? 'Category'; return <Pressable key={row.id} onPress={() => router.push({ pathname: '/allocation/[id]', params: { id: row.id } })}><Card style={{ padding: 11, gap: 5 }}><View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}><IconTile name={categoryIcon(name)} tint={colors.mist} /><Text style={{ flex: 1, fontWeight: '700' }}>{name}</Text><Text role="money">{formatMoney(summary.remainingCents)}</Text></View><ProgressBar value={summary.spentCents} max={row.amountCents} color={summary.remainingCents <= 0 ? colors.coral : colors.teal} /></Card></Pressable>; }) : <Text style={{ color: colors.muted }}>Your planned categories will show up here.</Text>}
-    <Action label="See your insights" variant="primary" fullWidth onPress={() => router.push('/insights')} />
-  </Page>;
+export default function Dashboard(){
+ const {data,loading,authConfigured,authLoading,authUser}=useData(),router=useRouter();
+ const tour=useWalkthrough(),params=useLocalSearchParams<{walkthrough?:string}>();
+ const [searchOpen,setSearchOpen]=useState(false),[search,setSearch]=useState('');
+ const results=useMemo(()=>searchScuttle(data,search),[data,search]);
+ useEffect(()=>{if(!tour?.active&&!tour?.dismissed&&(params.walkthrough==='1'||authUser?.walkthroughNeeded))tour?.start();},[params.walkthrough,authUser?.walkthroughNeeded,tour?.active,tour?.dismissed]);
+ if(authConfigured&&authLoading||loading)return <LoadingRecords/>;
+ if(authConfigured&&!authUser)return <Redirect href="/welcome"/>;
+ const current=currentPaycheck(data),cash=cashAccountSummary(data);
+ const allocated=current?allocatedForPaycheck(data,current.id):0,left=current?unallocatedForPaycheck(data,current.id):0;
+ const budget=activeBudgetAllocations(data).sort((a,b)=>allocationSummary(data,a).remainingCents-allocationSummary(data,b).remainingCents).slice(0,3);
+ const due=data.transactions.filter(t=>t.type==='subscription').map(t=>({t,date:nextSubscriptionDue(t,todayISODate(data.user))})).filter(r=>r.date).sort((a,b)=>a.date!.localeCompare(b.date!));
+ const name=(authUser?.displayName||data.user.displayName||'there').trim().split(/\s+/)[0];
+ return <Page title={`Good morning, ${name}`} headerRight={<View style={{flexDirection:'row',gap:6}}><Pressable accessibilityRole="button" accessibilityLabel={searchOpen?'Close search':'Search Scuttle'} onPress={()=>{setSearchOpen(!searchOpen);if(searchOpen)setSearch('');}} style={{width:44,height:44,alignItems:'center',justifyContent:'center',borderRadius:16,backgroundColor:colors.surface,borderWidth:1,borderColor:colors.border}}><Icon name="search"/></Pressable><Pressable accessibilityRole="button" accessibilityLabel="More and settings" onPress={()=>router.push('/more')} style={{width:44,height:44,alignItems:'center',justifyContent:'center'}}><Icon name="more"/></Pressable></View>}>
+  <Feedback/>
+  {searchOpen?<><Field label="Search Scuttle" value={search} onChangeText={setSearch} placeholder="Names, amounts, dates, or pages"/>{search.trim()?<Card>{results.map(r=><Action key={r.key} label={`${r.label} · ${r.detail}`} variant="text" onPress={()=>router.push(r.destination as Parameters<typeof router.push>[0])}/>)}{!results.length?<Text style={{color:colors.muted}}>No matching records.</Text>:null}</Card>:null}</>:null}
+  <TourHighlight id="home-quick-views"><Pressable accessibilityRole="button" accessibilityLabel="Open current paycheck plan" onPress={()=>router.push(paycheckDestination(data))}><HarborBalance title="Current paycheck" amount={current?formatMoney(current.amountCents):'A fresh start'} subtitle={current?`${current.source||'Paycheck'} · ${formatDateDisplay(current.receivedAt)}`:'Record a paycheck to begin'}/></Pressable>
+   {current?<><View style={{flexDirection:'row',justifyContent:'space-between',alignItems:'center'}}><View style={{gap:4}}><Text style={{fontSize:12,color:colors.muted}}>Allocated</Text><Text role="money" style={{fontSize:19}}>{formatMoney(allocated)}</Text></View><View style={{gap:4,alignItems:'flex-end'}}><Text style={{fontSize:12,color:colors.muted}}>{left<0?'Over assigned':'Left to assign'}</Text><Text role="money" style={{fontSize:23}}>{formatMoney(Math.abs(left))}</Text></View></View><ProgressBar value={allocated} max={current.amountCents} color={colors.teal}/></>:null}
+   <Action label={current?'Open paycheck plan':'Add a paycheck'} variant="primary" fullWidth onPress={()=>router.push(current?paycheckDestination(data):{pathname:'/paychecks',params:{add:'1'}})}/>
+  </TourHighlight>
+  <View style={{flexDirection:'row',gap:12}}><Pressable accessibilityRole="button" accessibilityLabel="View accounts" onPress={()=>router.push('/accounts')} style={{flex:1,borderRadius:18,padding:16,gap:7,backgroundColor:colors.surface,borderWidth:1,borderColor:colors.border}}><Text style={{fontSize:12,color:colors.muted}}>In your accounts</Text><Text role="money" style={{fontSize:22}}>{formatMoney(cash.totalCashCents)}</Text></Pressable><Pressable accessibilityRole="button" accessibilityLabel="Edit next payday" onPress={()=>router.push('/payday')} style={{flex:1,borderRadius:18,padding:16,gap:7,backgroundColor:colors.shell}}><Text style={{fontSize:12,color:colors.muted}}>Next payday</Text><Text style={{fontSize:20,fontWeight:'600'}}>{data.user.nextPayday?formatDateDisplay(data.user.nextPayday):'Set a date'}</Text></Pressable></View>
+  <Pressable accessibilityRole="button" accessibilityLabel="Open bills and reminders" onPress={()=>router.push('/reminders')} style={{flexDirection:'row',alignItems:'center',gap:12,padding:17,borderRadius:20,backgroundColor:colors.glass}}><IconTile name="calendar" tint={colors.surface}/><View style={{flex:1,gap:5}}><Text style={{fontSize:16,fontWeight:'600'}}>Bills & reminders</Text><Text style={{fontSize:12,color:colors.muted}}>{due.length?`Next: ${due[0].t.description} · ${formatDateDisplay(due[0].date!)}`:'No reminders scheduled'}</Text></View><Text>›</Text></Pressable>
+  <SectionTitle right={<Action label="View all" variant="text" onPress={()=>router.push('/budget')}/>}>Budget check-in</SectionTitle>
+  <Card style={{gap:0,paddingVertical:4}}>{budget.length?budget.map((a,index)=>{const s=allocationSummary(data,a),name=data.categories.find(c=>c.id===a.categoryId)?.name??'Category';return <Pressable accessibilityRole="button" accessibilityLabel={`Open ${name} budget`} key={a.id} onPress={()=>router.push({pathname:'/allocation/[id]',params:{id:a.id}})} style={{paddingVertical:15,borderBottomWidth:index<budget.length-1?1:0,borderColor:colors.border,gap:9}}><View style={{flexDirection:'row',alignItems:'center',gap:10}}><IconTile name={categoryIcon(name)} tint={s.remainingCents<0?colors.shell:colors.mist}/><Text style={{flex:1,fontSize:14,fontWeight:'500'}}>{name}</Text><Text style={{fontSize:12,color:s.remainingCents<0?colors.text:colors.muted}}>{formatMoney(Math.abs(s.remainingCents))} {s.remainingCents<0?'over budget':'left'}</Text></View><ProgressBar value={s.spentCents} max={a.amountCents} color={s.remainingCents<0?colors.coral:colors.teal}/></Pressable>;}):<Action label="Plan your categories" onPress={()=>router.push('/budget')}/>}</Card>
+  <View style={{flexDirection:'row',gap:8}}><View style={{flex:1}}><Action label="Transactions" fullWidth onPress={()=>router.push('/transactions')}/></View><View style={{flex:1}}><Action label="Your insights" fullWidth onPress={()=>router.push('/insights')}/></View></View>
+ </Page>;
 }
-function Metric({ label, value }: { label: string; value: string }) { return <View style={{ flex: 1, borderRadius: 12, padding: 12, backgroundColor: '#FFF9F0', borderWidth: 1, borderColor: colors.border }}><Text style={{ color: colors.muted, fontSize: 12 }}>{label}</Text><Text role="money" style={{ fontSize: 18 }}>{value}</Text></View>; }

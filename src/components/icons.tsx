@@ -2,9 +2,10 @@ import React from 'react';
 import { View } from 'react-native';
 import Svg, { Path, Circle, Rect, Line } from 'react-native-svg';
 import { colors } from '../design/theme';
-export type IconName = 'home' | 'accounts' | 'plus' | 'paycheck' | 'goals' | 'transaction' | 'move' | 'settings' | 'profile' | 'back' | 'more' | 'calendar' | 'category' | 'fuel' | 'shield';
+export type IconName = 'home' | 'accounts' | 'plus' | 'paycheck' | 'goals' | 'transaction' | 'move' | 'settings' | 'profile' | 'back' | 'more' | 'calendar' | 'category' | 'fuel' | 'shield' | 'search';
 export function Icon({ name, size = 23, color = colors.text }: { name: IconName; size?: number; color?: string }) {
   return <Svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+    {name === 'search' ? <><Circle cx="10.5" cy="10.5" r="6.5" /><Path d="m16 16 5 5" /></> : null}
     {name === 'home' ? <><Path d="m3 10 9-7 9 7v10H15v-7H9v7H3Z" /></> : null}
     {name === 'accounts' ? <><Path d="m2 8 10-5 10 5ZM3 21h18M4 18h16M6 10v6m6-6v6m6-6v6" /></> : null}
     {name === 'plus' ? <Path d="M12 4v16M4 12h16" /> : null}
@@ -23,7 +24,7 @@ export function Icon({ name, size = 23, color = colors.text }: { name: IconName;
   </Svg>;
 }
 export function IconTile({ name, tint = colors.glass }: { name: IconName; tint?: string }) {
-  return <View style={{ width: 38, height: 38, borderRadius: 10, backgroundColor: tint, alignItems: 'center', justifyContent: 'center' }}><Icon name={name} size={21} /></View>;
+  return <View style={{ width: 38, height: 38, borderRadius: 19, backgroundColor: tint, alignItems: 'center', justifyContent: 'center' }}><Icon name={name} size={21} /></View>;
 }
 
 export function categoryIcon(name: string): IconName {

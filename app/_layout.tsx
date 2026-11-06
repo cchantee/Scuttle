@@ -1,3 +1,5 @@
+import { LoadingRecords } from '../src/components/LoadingRecords';
+import { PaycheckReminderNotice } from '../src/components/PaycheckReminderNotice';
 import React from 'react';
 import { useFonts } from 'expo-font';
 import { Pressable, View, Text as NativeText } from 'react-native';
@@ -27,6 +29,8 @@ function Routes() {
       <Stack.Screen name="paychecks" />
       <Stack.Screen name="budget" />
       <Stack.Screen name="transactions" />
+      <Stack.Screen name="reminders" />
+      <Stack.Screen name="payday" />
       <Stack.Screen name="accounts" />
       <Stack.Screen name="goals" />
       <Stack.Screen name="history" />
@@ -40,11 +44,12 @@ function Routes() {
       <Stack.Screen name="goal/new" options={{ title: 'Create goal' }} />
       <Stack.Screen name="transaction/new" options={{ title: 'Add transaction' }} />
     </Stack.Protected>
-  </Stack></WalkthroughProvider>;
+  </Stack><PaycheckReminderNotice /></WalkthroughProvider>;
 }
 
 function LoadedApp({ retry }: { retry: () => void }) {
   const [loaded, error] = useFonts(fontAssets);
+  if (!loaded && !error) return <LoadingRecords label="Loading Scuttle…" />;
   if (!loaded) return <View style={{ flex: 1, backgroundColor: colors.background, padding: 32, justifyContent: 'center', gap: 16 }}><NativeText style={{ color: colors.text }}>{error ? 'Scuttle could not load its fonts. Check your connection to Expo and reopen the app.' : 'Loading Scuttle…'}</NativeText>{error ? <Pressable accessibilityRole="button" onPress={retry} style={{ minHeight: 44, justifyContent: 'center' }}><NativeText style={{ color: colors.text }}>Retry font download</NativeText></Pressable> : null}</View>;
   return <SafeAreaProvider><StatusBar style="dark" /><DataProvider><Routes /></DataProvider></SafeAreaProvider>;
 }

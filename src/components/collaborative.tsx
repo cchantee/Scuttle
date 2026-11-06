@@ -28,3 +28,14 @@ export function PlanGroup({ title, detail, amount, icon, onPress }: { title: str
     <View style={{ flex: 1 }}><Text style={{ fontWeight: '700' }}>{title}</Text><Text style={{ color: colors.muted, fontSize: 12 }}>{detail}</Text></View><Text role="money" style={{ fontSize: 16 }}>{amount}</Text><Text>›</Text>
   </Pressable>;
 }
+
+/** A consistent collaborative balance treatment: navy surface, clear hierarchy, quiet harbor accents. */
+export function HarborBalance({title,amount,subtitle}:{title:string;amount:string;subtitle?:string}){
+ return <View style={{borderRadius:24,backgroundColor:colors.text,padding:24,minHeight:190,overflow:'hidden',justifyContent:'center',gap:12}}>
+  <View pointerEvents="none" style={{position:'absolute',right:-35,bottom:-30,width:250,height:100,borderRadius:100,backgroundColor:colors.teal,opacity:0.28}}/>
+  <View pointerEvents="none" style={{position:'absolute',left:-45,bottom:-52,width:280,height:100,borderRadius:100,backgroundColor:colors.blue,opacity:0.22}}/>
+  <Text style={{fontSize:13,color:colors.mist,fontWeight:'500'}}>{title}</Text>
+  <Text role="money" style={{fontSize:42,letterSpacing:-1,color:colors.surface}}>{amount}</Text>
+  {subtitle?<Text style={{fontSize:13,lineHeight:19,color:colors.mist,maxWidth:'95%'}}>{subtitle}</Text>:null}
+ </View>;
+}

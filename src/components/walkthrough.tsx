@@ -7,23 +7,12 @@ import { useData } from '../state/DataProvider';
 const ink = '#344447';
 const muted = '#69777A';
 export const walkthroughSteps = [
-  { route: '/', target: 'nav-home', title: 'Home', body: 'Your paycheck plan and key updates live here.', placement: 'bottom' },
-  { route: '/', target: 'home-quick-views', title: 'View Focus', body: 'Switch between your paycheck, account balances, and completed savings.', placement: 'bottom' },
-  { route: '/', target: 'home-next-payday', title: 'Next payday', body: 'Set a date and pay schedule for your countdown.', placement: 'bottom' },
-  { route: '/', target: 'nav-add', title: 'Add menu', body: 'Use + to add transactions, plan paychecks, manage budgets, or fund goals.', placement: 'top' },
-  { route: '/', target: 'nav-add-transaction', title: 'Add Transaction', body: 'Record spending or income with an amount, date, and account.', placement: 'top' },
-  { route: '/', target: 'nav-add-paycheck', title: 'Add Paycheck', body: 'Plan upcoming pay or record a paycheck you have received.', placement: 'top' },
-  { route: '/', target: 'nav-add-budget', title: 'Budget', body: 'Create categories, assign paycheck money, and plan upcoming bills.', placement: 'top' },
-  { route: '/', target: 'nav-add-move', title: 'Move Money', body: 'Reassign unspent budget money to a category or goal without moving account funds.', placement: 'top' },
-  { route: '/', target: 'nav-add-goal', title: 'Add to Goal', body: 'Choose a savings goal and add a contribution.', placement: 'top' },
-  { route: '/accounts', target: 'nav-accounts', title: 'Accounts', body: 'Track cash balances and credit card debt separately.', placement: 'bottom' },
-  { route: '/paychecks', target: 'paychecks-main', title: 'Paychecks', body: 'Log income, then budget it across categories.', placement: 'bottom' },
-  { route: '/budget', target: 'budget-main', title: 'Budgets', body: 'Create categories and assign paycheck amounts.', placement: 'bottom' },
-  { route: '/transaction/new', target: 'expense-main', title: 'Expenses', body: 'Log a purchase, then choose its category and account.', placement: 'bottom' },
-  { route: '/goals', target: 'nav-goals', title: 'Savings goals', body: 'Track goal progress with separate contributions.', placement: 'bottom' },
-  { route: '/more', target: 'more-main', title: 'More tools', body: 'Find transactions and your financial history here.', placement: 'bottom' },
-  { route: '/', target: 'home-quick-actions', title: 'Quick navigation', body: 'At the bottom of Home, open Budget, Transactions, or History.', placement: 'top' },
-  { route: '/', target: 'home-active-budgets', title: 'Active budgets', body: 'See what remains in your current paycheck plan.', placement: 'top' },
+  { route: '/', target: 'home-quick-views', title: 'Your paycheck, at a glance', body: 'Open your current plan here. Older paychecks stay in the archive.', placement: 'bottom' },
+  { route: '/', target: 'nav-add', title: 'Add something', body: 'Use + for a paycheck, transaction, or savings goal.', placement: 'top' },
+  { route: '/paychecks', target: 'paychecks-main', title: 'Plan this paycheck', body: 'Give your current paycheck a plan. View older ones when you need them.', placement: 'bottom' },
+  { route: '/accounts', target: 'nav-accounts', title: 'Your accounts', body: 'Check where your money is held.', placement: 'bottom' },
+  { route: '/reminders', target: 'reminders-main', title: 'Bills & reminders', body: 'Find due dates here. Reminders also appear when you receive a paycheck.', placement: 'bottom' },
+  { route: '/goals', target: 'nav-goals', title: 'Save for what matters', body: 'Track your goals here. You’re ready to explore.', placement: 'bottom' },
 ];
 
 type TourContextValue = { active: boolean; dismissed: boolean; exit: () => void; index: number; start: () => void; next: () => void; previous: () => void; finish: () => Promise<void> };

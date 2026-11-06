@@ -22,10 +22,12 @@ export default function More() {
     <SectionTitle>Money tools</SectionTitle>
     <Card style={{ padding: 0, gap: 0 }}>
       <SettingsRow icon="category" title="Budget categories" detail="Categories and paycheck allocations" onPress={() => router.push('/budget')} />
+      <SettingsRow icon="calendar" title="Bills & reminders" detail="Upcoming bills and subscriptions" onPress={() => router.push('/reminders')} />
       <SettingsRow icon="transaction" title="Transactions" detail="Record and review activity" onPress={() => router.push('/transactions')} />
       <SettingsRow icon="calendar" title="Financial history" detail="Filter and explore past records" onPress={() => router.push('/history')} last />
     </Card>
 
+    <Action label="Your insights" onPress={()=>router.push('/insights')} />
     <SectionTitle>App tools</SectionTitle>
     <Card style={{ padding: 0, gap: 0 }}>
       <SettingsRow icon="home" title="Replay walkthrough" detail="A quick tour of Scuttle" onPress={() => { walkthrough?.start(); router.replace('/'); }} last />

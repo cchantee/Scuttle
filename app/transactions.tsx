@@ -1,170 +1,151 @@
-import { goalFundsHeld, goalHoldingAccount } from '../src/domain/goalFunds';
-import { payingAccountSelection } from '../src/domain/transactionAccounts';
-import { Card } from '../src/components/ui';
 import { EmptyState } from '../src/components/coastal';
-import { Text } from '../src/components/typography';
-import React, { useEffect, useRef, useState } from 'react';
-import { Pressable, View } from 'react-native';
-import { useLocalSearchParams, usePathname, useRouter } from 'expo-router';
-import { Action, DateField, Field, Feedback, Page, RecordLine, SelectId } from '../src/components/ui';
-import { useCrud } from '../src/components/hooks';
-import { newId, SubscriptionFrequency, Transaction, TransactionType } from '../src/domain/models';
-import { formatMoney, parseMoney } from '../src/domain/money';
-import { useData } from '../src/state/DataProvider';
-import { formatDateDisplay, formatDateInput, normalizeDateInput, todayDateInput } from '../src/domain/date';
-import { TourHighlight } from '../src/components/walkthrough';
+import { HarborBalance as CoastalBalance } from '../src/components/collaborative';
+import { currentPaycheck } from '../src/domain/navigation';
+import { defaultActivityDate, transactionInPaycheck } from '../src/domain/paycheckActivity';
 
-const kinds: TransactionType[] = ['expense', 'income', 'transfer', 'subscription'];
-const subscriptionFrequencies: SubscriptionFrequency[] = ['weekly', 'biweekly', 'monthly', 'annual', 'custom'];
+import { goalFundsHeld, goalHoldingAccount } from '../src/domain/goalFunds';
+import React, { useEffect, useRef, useState } from 'react';
+import { Pressable, ScrollView, View } from 'react-native';
+import { useIsFocused, useLocalSearchParams, usePathname, useRouter } from 'expo-router';
+import { colors } from '../src/design/theme';
+import { Text } from '../src/components/typography';
+import { Action, Card, DateField, Field, Feedback, Page, RecordLine, SelectId } from '../src/components/ui';
+
+import { TourHighlight } from '../src/components/walkthrough';
+import { useCrud } from '../src/components/hooks';
+import { useData } from '../src/state/DataProvider';
+import { newId, SubscriptionFrequency, Transaction } from '../src/domain/models';
+import { formatMoney, parseMoney } from '../src/domain/money';
+import { formatDateDisplay, formatDateInput, normalizeDateInput, todayDateInput, todayISODate } from '../src/domain/date';
+import { payingAccountSelection } from '../src/domain/transactionAccounts';
+import { billPaymentDraft, isBill, ledgerType, transactionKind, transactionTypeLabel, TransactionFormKind } from '../src/domain/transactionKinds';
+
+const kinds: {id: TransactionFormKind; title: string}[] = [
+  {id:'expense',title:'Expense'}, {id:'bill',title:'Bill'}, {id:'income',title:'Income'}, {id:'transfer',title:'Transfer'}, {id:'subscription',title:'Subscription'},
+];
+const frequencies: SubscriptionFrequency[] = ['weekly','biweekly','monthly','annual','custom'];
+const filters = [{id:'all',title:'All types'}, {id:'expense',title:'Spending'}, {id:'bill',title:'Bills'}, {id:'income',title:'Income'}, {id:'transfer',title:'Transfers'}, {id:'subscription',title:'Subscriptions'}] as const;
 
 export default function Transactions() {
-  const crud = useCrud('transactions');
-  const { data, loading, reportError, settleGoalContribution } = useData();
-  const router = useRouter();
-  const pathname = usePathname();
-  const params = useLocalSearchParams<{ allocationId?: string; accountId?: string; editId?: string; goalContributionId?: string; type?: string }>();
-  const [formOpen, setFormOpen] = useState(pathname === '/transaction/new');
-  const [filter, setFilter] = useState<'all' | 'expense' | 'income'>('all');
-  const [saved, setSaved] = useState(false);
-  const [search, setSearch] = useState('');
-  const [kind, setKind] = useState<TransactionType>(params.type === 'transfer' ? 'transfer' : 'expense');
-  const [description, setDescription] = useState('');
-  const [amount, setAmount] = useState('');
-  const [date, setDate] = useState(todayDateInput(data.user));
-  const [categoryId, setCategory] = useState('');
-  const [allocationId, setAllocation] = useState('');
-  const [accountId, setAccount] = useState('');
-  const accountManuallySelected = useRef(false);
-  const [toAccountId, setToAccount] = useState('');
-  const [paycheckId, setPaycheckId] = useState('');
-  const [notes, setNotes] = useState('');
-  const [subscriptionFrequency, setSubscriptionFrequency] = useState<SubscriptionFrequency>('monthly');
-  const [subscriptionInterval, setSubscriptionInterval] = useState('');
-  const [nextDueDate, setNextDueDate] = useState(todayDateInput(data.user));
-  const appliedParams = useRef('');
-  const paramKey = `${params.editId ?? ''}|${params.allocationId ?? ''}|${params.accountId ?? ''}|${params.goalContributionId ?? ''}`;
-
-  const fill = (tx: Transaction) => {
-    accountManuallySelected.current = true;
-    setKind(tx.type); setDescription(tx.description); setAmount((tx.amountCents / 100).toFixed(2)); setDate(formatDateInput(tx.date));
-    setCategory(tx.categoryId ?? ''); setAllocation(tx.allocationId ?? ''); setAccount(tx.accountId ?? '');
-    setToAccount(tx.toAccountId ?? ''); setPaycheckId(tx.paycheckId ?? ''); setNotes(tx.notes ?? ''); setFormOpen(true);
-    setSubscriptionFrequency(tx.subscriptionFrequency ?? 'monthly'); setSubscriptionInterval(tx.subscriptionIntervalDays?.toString() ?? ''); setNextDueDate(formatDateInput(tx.nextDueDate ?? tx.date));
+  const crud=useCrud('transactions');
+  const {data,loading,reportError,settleGoalContribution}=useData();
+  const router=useRouter(), pathname=usePathname(), focused=useIsFocused();
+  const params=useLocalSearchParams<{allocationId?:string;accountId?:string;editId?:string;goalContributionId?:string;type?:string;reminder?:string;scope?:string}>();
+  const [formOpen,setFormOpen]=useState(pathname==='/transaction/new');
+  const [kind,setKind]=useState<TransactionFormKind>('expense'), [scheduledBill,setScheduledBill]=useState(false);
+  const [description,setDescription]=useState(''),[amount,setAmount]=useState(''),[date,setDate]=useState(formatDateInput(defaultActivityDate(data)));
+  const [categoryId,setCategory]=useState(''),[allocationId,setAllocation]=useState(''),[accountId,setAccount]=useState(''),[toAccountId,setToAccount]=useState('');
+  const [paycheckId,setPaycheckId]=useState(''),[notes,setNotes]=useState('');
+  const [frequency,setFrequency]=useState<SubscriptionFrequency>('monthly'),[interval,setInterval]=useState(''),[dueDate,setDueDate]=useState(todayDateInput(data.user));
+  const [scope,setScope]=useState('current');
+  const current=currentPaycheck(data);
+  const [filter,setFilter]=useState<typeof filters[number]['id']>('all'),[search,setSearch]=useState(''),[saved,setSaved]=useState(false),[busy,setBusy]=useState(false);
+  const manualAccount=useRef(false), saving=useRef(false), applied=useRef('');
+  const type=ledgerType(kind,scheduledBill), scheduled=type==='subscription', spending=type==='expense';
+  const pending=data.contributions.find(c=>c.id===params.goalContributionId && goalFundsHeld(data,c));
+  const routeKey=JSON.stringify([pathname,params.editId,params.allocationId,params.accountId,params.goalContributionId,params.type,params.reminder]);
+  const clearDraft=()=>{
+    manualAccount.current=false;crud.cancel();setKind('expense');setScheduledBill(false);setDescription('');setAmount('');setDate(formatDateInput(defaultActivityDate(data)));
+    setCategory('');setAllocation('');setAccount('');setToAccount('');setPaycheckId('');setNotes('');setFrequency('monthly');setInterval('');setDueDate(todayDateInput(data.user));
   };
-
-  useEffect(() => {
-    if (loading || appliedParams.current === paramKey) return;
-    const toEdit = data.transactions.find(item => item.id === params.editId);
-    if (toEdit) { fill(toEdit); crud.setEditingId(toEdit.id); }
-    const contribution = data.contributions.find(item => item.id === params.goalContributionId && goalFundsHeld(data,item));
-    if (contribution) {
-      setKind('transfer'); setDescription(`Goal contribution · ${data.goals.find(goal => goal.id === contribution.goalId)?.name ?? 'Savings goal'}`);
-      setAmount((contribution.amountCents / 100).toFixed(2)); setDate(todayDateInput(data.user)); setAccount(goalHoldingAccount(data,contribution) ?? '');
-      setCategory(''); setAllocation(''); setFormOpen(true);
-    }
-    const allocation = data.allocations.find(item => item.id === params.allocationId);
-    if (allocation) { setAllocation(allocation.id); setCategory(allocation.categoryId); }
-    if (!params.goalContributionId && params.accountId && data.accounts.some(item => item.id === params.accountId)) { accountManuallySelected.current = true; setAccount(params.accountId); }
-    appliedParams.current = paramKey;
-  }, [loading, data.transactions, data.contributions, data.goals, data.allocations, data.accounts, params.allocationId, params.accountId, params.editId, params.goalContributionId, paramKey]);
-
-  useEffect(() => {
-    if (loading || !formOpen || kind !== 'expense' || crud.editingId || params.goalContributionId) return;
-    const next = payingAccountSelection(data, { allocationId, categoryId }, { accountId, manual: accountManuallySelected.current });
-    if (next !== accountId) setAccount(next);
-  }, [data, loading, formOpen, kind, crud.editingId, params.goalContributionId, allocationId, categoryId, accountId]);
-
-  const reset = (close = true) => {
-    accountManuallySelected.current = false;
-    setKind('expense'); setDescription(''); setAmount(''); setDate(todayDateInput(data.user));
-    setCategory(''); setAllocation(''); setAccount(''); setToAccount(''); setPaycheckId(''); setNotes(''); setSubscriptionFrequency('monthly'); setSubscriptionInterval(''); setNextDueDate(todayDateInput(data.user)); crud.cancel();
-    if (close) {
-      setFormOpen(false);
-      if (pathname === '/transaction/new') router.replace('/transactions');
-    }
+  const fill=(tx:Transaction)=>{
+    manualAccount.current=true;setKind(transactionKind(data,tx));setScheduledBill(tx.type==='subscription');setDescription(tx.description);setAmount((tx.amountCents/100).toFixed(2));setDate(formatDateInput(tx.date));
+    setCategory(tx.categoryId??'');setAllocation(tx.allocationId??'');setAccount(tx.accountId??'');setToAccount(tx.toAccountId??'');setPaycheckId(tx.paycheckId??'');setNotes(tx.notes??'');
+    setFrequency(tx.subscriptionFrequency??'monthly');setInterval(tx.subscriptionIntervalDays?.toString()??'');setDueDate(formatDateInput(tx.nextDueDate??tx.date));setFormOpen(true);
   };
-  const submit = async () => {
-    try {
-      if ((kind === 'expense' || kind === 'transfer') && !accountId) return reportError('Choose a paying account.');
-      if (!description.trim()) return reportError('Enter a transaction description.');
-      const transactionDate = normalizeDateInput(date);
-      if (!transactionDate) return reportError('Enter a valid date as M/D/YYYY.');
-      const normalizedDueDate = kind === 'subscription' ? normalizeDateInput(nextDueDate) : undefined;
-      if (kind === 'subscription' && !normalizedDueDate) return reportError('Enter a valid next charge date as M/D/YYYY.');
-      if (kind === 'subscription' && subscriptionFrequency === 'custom' && (!/^\d+$/.test(subscriptionInterval) || Number(subscriptionInterval) < 1 || Number(subscriptionInterval) > 365)) return reportError('Choose a repeat interval from 1 to 365 days.');
-      const allocation = data.allocations.find(item => item.id === allocationId);
-      if (params.goalContributionId) {
-        const settled = await settleGoalContribution(params.goalContributionId, {
-          id: newId(), type: kind, description: description.trim(), amountCents: parseMoney(amount), date: transactionDate,
-          categoryId: kind === 'expense' ? (allocation?.categoryId ?? categoryId) || undefined : undefined,
-          allocationId: kind === 'expense' ? allocationId || undefined : undefined,
-          accountId: accountId || undefined, toAccountId: kind === 'transfer' ? toAccountId || undefined : undefined,
-          notes: notes || undefined,
-        });
-        if (settled) reset();
-        return;
-      }
-      const previousTransaction = data.transactions.find(item => item.id === crud.editingId);
-      const ok = await crud.submit({
-        type: kind, description: description.trim(), amountCents: parseMoney(amount), date: transactionDate,
-        categoryId: kind === 'expense' ? (allocation?.categoryId ?? categoryId) || undefined : kind === 'subscription' ? categoryId || undefined : undefined,
-        allocationId: kind === 'expense' ? allocationId || undefined : undefined,
-        accountId: accountId || undefined, toAccountId: kind === 'transfer' ? toAccountId || undefined : undefined,
-        paycheckId: kind === 'transfer' ? paycheckId || undefined : undefined,
-        notes: notes || undefined,
-        goalContributionId: previousTransaction?.goalContributionId,
-        subscriptionFrequency: kind === 'subscription' ? subscriptionFrequency : undefined,
-        subscriptionIntervalDays: kind === 'subscription' && subscriptionFrequency === 'custom' ? Number(subscriptionInterval) : undefined,
-        nextDueDate: normalizedDueDate,
-      });
-      if (ok) { setSaved(true); reset(); }
-    } catch (e) { reportError(e instanceof Error ? e.message : 'Invalid transaction.'); }
+  useEffect(()=>{
+    if(!focused){applied.current='';return;}
+    if(loading||applied.current===routeKey)return;
+    applied.current=routeKey;clearDraft();setFormOpen(pathname==='/transaction/new');
+    if(params.scope==='all')setScope('all');
+    if(params.reminder==='1')setScheduledBill(true);
+    const tx=data.transactions.find(t=>t.id===params.editId);
+    if(tx){fill(tx);crud.setEditingId(tx.id);return;}
+    if(params.type&&kinds.some(k=>k.id===params.type))setKind(params.type as TransactionFormKind);
+    const allocation=data.allocations.find(a=>a.id===params.allocationId);
+    if(allocation){setAllocation(allocation.id);setCategory(allocation.categoryId);setFormOpen(true);}
+    if(params.accountId&&data.accounts.some(a=>a.id===params.accountId)){manualAccount.current=true;setAccount(params.accountId);}
+    if(pending){setKind('transfer');setDescription(`Goal contribution · ${data.goals.find(g=>g.id===pending.goalId)?.name??'Savings goal'}`);setAmount((pending.amountCents/100).toFixed(2));setAccount(goalHoldingAccount(data,pending)??'');manualAccount.current=true;setFormOpen(true);}
+  },[focused,loading,routeKey]);
+  useEffect(()=>{
+    if(loading||!formOpen||!spending||crud.editingId||params.goalContributionId)return;
+    const next=payingAccountSelection(data,{allocationId,categoryId},{accountId,manual:manualAccount.current});
+    if(next!==accountId)setAccount(next);
+  },[data,loading,formOpen,spending,crud.editingId,params.goalContributionId,allocationId,categoryId,accountId]);
+  const close=()=>{
+    clearDraft();setFormOpen(false);
+    router.replace({pathname:'/transactions',params:{editId:undefined,allocationId:undefined,accountId:undefined,goalContributionId:undefined,type:undefined,reminder:undefined,scope:undefined}});
   };
-  const filtered = [...data.transactions].sort((a, b) => b.date.localeCompare(a.date)).filter(tx => {
-    const accountName = data.accounts.find(item => item.id === tx.accountId)?.name ?? '';
-    const categoryName = data.categories.find(item => item.id === tx.categoryId)?.name ?? '';
-    const query = search.trim().toLowerCase();
-    return (filter === 'all' || tx.type === filter) && (!query || `${tx.description} ${tx.type} ${accountName} ${categoryName} ${tx.date}`.toLowerCase().includes(query));
-  });
+  const submit=async()=>{
+    if(saving.current)return;
+    saving.current=true;setBusy(true);
+    try{
+      if((spending||type==='transfer')&&!accountId)throw new Error('Choose a paying account.');
+      if(!description.trim())throw new Error(kind==='bill'?'Enter a bill name.':'Enter a payee or description.');
+      const enteredDate=normalizeDateInput(date);
+      if(!enteredDate)throw new Error('Enter a valid transaction date.');
+      const nextDueDate=scheduled?normalizeDateInput(dueDate):undefined;
+      if(scheduled&&!nextDueDate)throw new Error('Choose a valid next due date.');
+      if(scheduled&&frequency==='custom'&&(!/^\d+$/.test(interval)||+interval<1||+interval>365))throw new Error('Choose a repeat interval from 1 to 365 days.');
+      const allocation=data.allocations.find(a=>a.id===allocationId),previous=data.transactions.find(t=>t.id===crud.editingId);
+      const fields={type,description:description.trim(),amountCents:parseMoney(amount),date:enteredDate,purpose:kind==='bill'?'bill' as const:undefined,
+        categoryId:spending?(allocation?.categoryId??categoryId)||undefined:scheduled?categoryId||undefined:undefined,
+        allocationId:spending?allocationId||undefined:undefined,accountId:accountId||undefined,toAccountId:type==='transfer'?toAccountId||undefined:undefined,
+        paycheckId:type==='transfer'?paycheckId||undefined:undefined,notes:notes.trim()||undefined,goalContributionId:previous?.goalContributionId,
+        subscriptionFrequency:scheduled?frequency:undefined,subscriptionIntervalDays:scheduled&&frequency==='custom'?+interval:undefined,nextDueDate:nextDueDate||undefined};
+      const ok=params.goalContributionId?await settleGoalContribution(params.goalContributionId,{id:newId(),...fields}):await crud.submit(fields);
+      if(ok){setSaved(true);close();}
+    }catch(error){reportError(error instanceof Error?error.message:'Could not save this transaction.');}
+    finally{saving.current=false;setBusy(false);}
+  };
+  const recordBillPayment=()=>{
+    const tx=data.transactions.find(t=>t.id===crud.editingId);
+    if(!tx)return;
+    fill({id:'bill-payment-draft',...billPaymentDraft(data,tx,todayISODate(data.user))});crud.cancel();setScheduledBill(false);setPaycheckId('');manualAccount.current=Boolean(tx.accountId);
+  };
+  const filtered=[...data.transactions].filter(tx=>{
+    if(tx.type==='subscription')return false;
+    if(scope!=='all'&&!transactionInPaycheck(data,tx,current))return false;
+    const query=search.trim().toLowerCase(),bill=isBill(data,tx);
+    const matches=filter==='all'||filter==='bill'&&bill||filter!=='bill'&&filter!=='subscription'&&tx.type===filter;
+    return matches&&(!query||`${tx.description} ${transactionTypeLabel(data,tx)} ${data.categories.find(c=>c.id===tx.categoryId)?.name??''} ${data.accounts.find(a=>a.id===tx.accountId)?.name??''} ${tx.date}`.toLowerCase().includes(query));
+  }).sort((a,b)=>(b.type==='subscription'?b.nextDueDate??b.date:b.date).localeCompare(a.type==='subscription'?a.nextDueDate??a.date:a.date));
+  const spent=filtered.filter(t=>t.type==='expense').reduce((n,t)=>n+t.amountCents,0);
+  const editingScheduledBill=kind==='bill'&&scheduled&&Boolean(crud.editingId);
+  return <Page title={formOpen?crud.editingId?'Edit transaction':'Add transaction':'Transactions'}><TourHighlight id="expense-main"><Feedback />
+    {saved&&!formOpen?<View accessibilityLiveRegion="polite" style={{padding:13,borderRadius:14,backgroundColor:colors.glass}}><Text style={{fontSize:13}}>Your transaction was saved.</Text></View>:null}
+    {!formOpen?<>
+      <CoastalBalance title={scope==='all'?'All recorded spending':'Spending this paycheck'} amount={formatMoney(spent)} subtitle={scope==='all'?'All paychecks':current?`${current.source || 'Paycheck'} · ${formatDateDisplay(current.receivedAt)}`:'Record a paycheck to start'}/>
+      <SelectId label="Show transactions" choices={[{id:'current',title:'This paycheck'},{id:'all',title:'All'}]} value={scope} onChange={value=>setScope(value||'current')}/>
+      <Action label="Bills & reminders →" variant="text" onPress={()=>router.push('/reminders')}/>
+      <Action label="+ Add transaction" variant="primary" fullWidth onPress={()=>router.push('/transaction/new')} />
+      <Field label="Search activity" value={search} onChangeText={setSearch} placeholder="Payee, bill, account, or category" />
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{gap:7}}>{filters.filter(f=>f.id!=='subscription').map(f=><Chip key={f.id} label={f.title} selected={filter===f.id} onPress={()=>setFilter(f.id)} />)}</ScrollView>
+      {!filtered.length?<EmptyState message={scope==='all'?'No matching activity.':'No transactions for this paycheck yet.'}/>:null}
+      {filtered.map(tx=><RecordLine key={tx.id} icon={tx.type==='transfer'?'move':isBill(data,tx)?'home':tx.type==='subscription'?'calendar':'transaction'} title={tx.description}
+        amount={`${tx.type==='expense'?'−':tx.type==='income'?'+':''}${formatMoney(tx.amountCents)}`}
+        detail={`${transactionTypeLabel(data,tx)} · ${formatDateDisplay(tx.type==='subscription'?tx.nextDueDate??tx.date:tx.date)}${tx.accountId?` · ${data.accounts.find(a=>a.id===tx.accountId)?.name??'Account'}`:''}`}
+        onView={()=>{fill(tx);crud.setEditingId(tx.id);}} onEdit={()=>{fill(tx);crud.setEditingId(tx.id);}} onDelete={()=>crud.confirmDelete(tx.id)} />)}
+    </>:<>
 
-  return <Page title={pathname === '/transaction/new' ? 'Add transaction' : 'Transactions'}><TourHighlight id="expense-main"><Feedback />
-    {saved ? <Card><Text accessibilityRole="alert">Transaction saved.</Text></Card> : null}
-    {!formOpen ? <>
-      <View style={{ flexDirection: 'row', gap: 8 }}>{(['all', 'expense', 'income'] as const).map(f => <Action key={f} label={f === 'all' ? 'All' : f === 'expense' ? 'Expenses' : 'Income'} variant={filter === f ? 'primary' : 'secondary'} onPress={() => setFilter(f)} />)}</View>
-      <Field label="Search transactions" value={search} onChangeText={setSearch} placeholder="Search description, category, account" />
-      <Action label="+ Add transaction" variant="primary" fullWidth onPress={() => router.push('/transaction/new')} />
-    </> : <>
-      <View style={{ padding: 12, borderRadius: 10, backgroundColor: '#D9DFE6' }}><Text>Enter a purchase, income, transfer, or subscription reminder. Subscription reminders do not change account balances; log the charge as an expense when it is paid.</Text></View>
-      {params.goalContributionId ? <View style={{ padding: 12, borderRadius: 10, backgroundColor: '#D9DFE6' }}><Text>Move committed money to another account. Your goal amount stays the same.</Text></View> : null}
-      <Text style={{ fontWeight: '600' }}>Transaction type</Text>
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>{(params.goalContributionId ? ['transfer'] as TransactionType[] : kinds).map(value => <Pressable key={value} accessibilityRole="button" accessibilityState={{ selected: kind === value }} onPress={() => setKind(value)} style={{ paddingHorizontal: 14, paddingVertical: 9, borderWidth: 1, borderColor: kind === value ? '#69777A' : '#E9E7E2', borderRadius: 8, backgroundColor: kind === value ? '#344447' : '#fff' }}><Text style={{ color: kind === value ? '#fff' : '#344447', fontWeight: kind === value ? '700' : '400' }}>{value === 'expense' ? 'Expense' : value === 'income' ? 'Income' : value === 'transfer' ? 'Transfer' : 'Subscription'}</Text></Pressable>)}</View>
-      <Field label="Payee / description" value={description} onChangeText={setDescription} placeholder="e.g. Groceries" />
-      {params.goalContributionId ? <Text>Amount to move: {formatMoney(data.contributions.find(item => item.id === params.goalContributionId)?.amountCents ?? 0)}</Text> : <Field label="Amount" value={amount} onChangeText={setAmount} keyboardType="decimal-pad" placeholder="0.00" />}
-      {kind === 'subscription' ? <>
-        <Text style={{ fontWeight: '600' }}>Repeat schedule</Text>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>{subscriptionFrequencies.map(value => <Pressable key={value} accessibilityRole="button" accessibilityState={{ selected: subscriptionFrequency === value }} onPress={() => setSubscriptionFrequency(value)} style={{ paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: subscriptionFrequency === value ? '#69777A' : '#E9E7E2', borderRadius: 8, backgroundColor: subscriptionFrequency === value ? '#344447' : '#fff' }}><Text style={{ color: subscriptionFrequency === value ? '#fff' : '#344447' }}>{value === 'biweekly' ? 'Every 2 weeks' : value === 'annual' ? 'Yearly' : value === 'custom' ? 'Other' : value[0].toUpperCase() + value.slice(1)}</Text></Pressable>)}</View>
-        {subscriptionFrequency === 'custom' ? <Field label="Repeat every (days)" value={subscriptionInterval} onChangeText={setSubscriptionInterval} keyboardType="numeric" placeholder="e.g. 30" /> : null}
-        <DateField label="Next charge date" value={nextDueDate} onChangeText={setNextDueDate} />
-      </> : <DateField label="Date" value={date} onChangeText={setDate} />}
-      {kind === 'expense' ? <>
-        {params.allocationId && data.allocations.some(item => item.id === params.allocationId) ? <Text>Budget category: {data.categories.find(item => item.id === data.allocations.find(a => a.id === params.allocationId)?.categoryId)?.name ?? 'Selected allocation'}</Text> : <>
-          <SelectId label="Category (optional)" choices={data.categories.map(item => ({ id: item.id, title: item.name }))} value={categoryId} onChange={value => { setCategory(value); setAllocation(''); }} create="category" />
-          <Text style={{ color: '#69777A', fontSize: 12 }}>Expenses are applied to the matching active paycheck budget automatically.</Text>
-        </>}
-      </> : kind === 'subscription' ? <>
-        <SelectId label="Budget category (optional)" choices={data.categories.map(item => ({ id: item.id, title: item.name }))} value={categoryId} onChange={setCategory} create="category" />
-        <Text style={{ color: '#69777A', fontSize: 12 }}>This reminder appears on the dashboard and budget page when a charge is approaching.</Text>
-      </> : null}
-      {params.goalContributionId ? <Text>Funding account: {data.accounts.find(item => item.id === accountId)?.name ?? 'Missing account'}</Text> : <SelectId label={kind === 'transfer' ? 'Source account' : kind === 'subscription' ? 'Account charged (optional)' : kind === 'expense' ? 'Paying account' : 'Account (optional)'} choices={data.accounts.map(item => ({ id: item.id, title: `${item.name}${item.type === 'credit_card' ? ' · credit card' : ''}`}))} value={accountId} onChange={value => { accountManuallySelected.current = true; setAccount(value); if (toAccountId === value) setToAccount(''); }} create="account" />}
-      {kind === 'transfer' ? <SelectId label="Destination account" choices={data.accounts.filter(item => item.id !== accountId).map(item => ({ id: item.id, title: item.name }))} value={toAccountId} onChange={setToAccount} create="account" /> : null}
-      <Field label="Notes (optional)" value={notes} onChangeText={setNotes} multiline />
-      <Action label={crud.editingId ? 'Save changes' : params.goalContributionId ? 'Move money' : kind === 'subscription' ? 'Save subscription' : 'Save transaction'} variant="primary" fullWidth onPress={() => void submit()} />
-      <Action label="Cancel" onPress={() => reset()} />
+      <View style={{gap:10}}><Text style={{fontSize:14,fontWeight:'600'}}>Transaction type</Text><View style={{flexDirection:'row',flexWrap:'wrap',gap:7}}>{kinds.filter(k=>!params.goalContributionId||k.id==='transfer').map(k=><Chip key={k.id} label={k.title} selected={kind===k.id} onPress={()=>setKind(k.id)} />)}</View></View>
+      {kind==='bill'&&!editingScheduledBill?<Card><Text style={{fontSize:14,fontWeight:'600'}}>Is this bill paid?</Text><View style={{flexDirection:'row',gap:8}}><Chip label="Paid bill" selected={!scheduledBill} onPress={()=>setScheduledBill(false)} /><Chip label="Schedule reminder" selected={scheduledBill} onPress={()=>setScheduledBill(true)} /></View></Card>:null}
+      {editingScheduledBill?<Card><Text style={{fontWeight:'600'}}>Scheduled bill</Text><Action label="Record a payment" onPress={recordBillPayment}/></Card>:null}
+      <Card>
+        <Field label={kind==='bill'?'Bill name':'Payee / description'} value={description} onChangeText={setDescription} placeholder={kind==='bill'?'e.g. Apartment rent':'e.g. Groceries'} />
+        {params.goalContributionId?<View><Text style={{fontSize:12,color:colors.muted}}>Amount to move</Text><Text role="money" style={{fontSize:26}}>{formatMoney(pending?.amountCents??0)}</Text></View>:<Field label="Amount" value={amount} onChangeText={setAmount} keyboardType="decimal-pad" placeholder="0.00" />}
+        {!scheduled?<DateField label={kind==='bill'?'Payment date':'Date'} value={date} onChangeText={setDate}/>:<><DateField label="Next due date" value={dueDate} onChangeText={setDueDate}/><SelectId label="Repeat" choices={frequencies.map(f=>({id:f,title:f==='biweekly'?'Every two weeks':f==='custom'?'Custom interval':f[0].toUpperCase()+f.slice(1)}))} value={frequency} onChange={value=>{if(value)setFrequency(value as SubscriptionFrequency);}}/>{frequency==='custom'?<Field label="Repeat every (days)" value={interval} onChangeText={setInterval} keyboardType="numeric" placeholder="1–365"/>:null}</>}
+        {spending||scheduled?<SelectId label={kind==='bill'?'Bill category':'Category (optional)'} choices={data.categories.map(c=>({id:c.id,title:c.name}))} value={categoryId} onChange={value=>{setCategory(value);setAllocation('');}} create="category"/>:null}
+        {params.goalContributionId?<Text style={{fontSize:13}}>Funding account: {data.accounts.find(a=>a.id===accountId)?.name??'Select an account'}</Text>:<SelectId label={type==='transfer'?'From account':scheduled?'Account charged (optional)':type==='income'?'Receiving account':'Paying account'} choices={data.accounts.map(a=>({id:a.id,title:a.name}))} value={accountId} onChange={value=>{manualAccount.current=true;setAccount(value);if(value===toAccountId)setToAccount('');}} create="account"/>}
+        {type==='transfer'?<SelectId label="To account" choices={data.accounts.filter(a=>a.id!==accountId).map(a=>({id:a.id,title:a.name}))} value={toAccountId} onChange={setToAccount}/>:null}
+
+        <Field label="Notes (optional)" value={notes} onChangeText={setNotes} multiline/>
+      </Card>
+      <Action label={busy?'Saving…':params.goalContributionId?'Move money':crud.editingId?'Save changes':kind==='bill'?scheduled?'Save bill reminder':'Save bill payment':scheduled?'Save subscription':'Save transaction'} variant="primary" fullWidth onPress={()=>void submit()}/>
+      <Action label="Cancel" variant="text" fullWidth onPress={close}/>
     </>}
-    {!formOpen ? <>
-      <Text style={{ fontWeight: '600', fontSize: 17 }}>Activity</Text>
-      {!filtered.length ? <EmptyState message={search ? 'No matching transactions.' : 'Your activity starts here.'} /> : null}
-      {filtered.map(tx => <RecordLine key={tx.id} icon={tx.type === 'transfer' ? 'move' : 'transaction'} title={tx.description} amount={`${tx.type === 'expense' ? '−' : tx.type === 'income' ? '+' : ''}${formatMoney(tx.amountCents)}`} detail={`${formatDateDisplay(tx.type === 'subscription' ? tx.nextDueDate ?? tx.date : tx.date)} · ${tx.type}${tx.categoryId ? ` · ${data.categories.find(c => c.id === tx.categoryId)?.name ?? ''}` : ''}${tx.accountId ? ` · ${data.accounts.find(a => a.id === tx.accountId)?.name ?? 'Account'}` : ''}`} onView={() => { fill(tx); crud.setEditingId(tx.id); }} onEdit={() => { fill(tx); crud.setEditingId(tx.id); }} onDelete={() => crud.confirmDelete(tx.id)} />)}
-    </> : null}
   </TourHighlight></Page>;
+}
+function Chip({label,selected,onPress}:{label:string;selected:boolean;onPress:()=>void}){
+  return <Pressable accessibilityRole="button" accessibilityState={{selected}} onPress={onPress} style={{minHeight:44,paddingHorizontal:14,paddingVertical:11,borderRadius:14,borderWidth:1,borderColor:selected?colors.text:colors.border,backgroundColor:selected?colors.text:colors.surface,justifyContent:'center'}}><Text style={{fontSize:13,fontWeight:selected?'600':'400',color:selected?colors.surface:colors.text}}>{label}</Text></Pressable>;
 }

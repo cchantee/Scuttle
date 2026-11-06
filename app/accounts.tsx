@@ -1,5 +1,6 @@
 import { Card } from '../src/components/ui';
-import { EmptyState, CoastalBalance } from '../src/components/coastal';
+import { EmptyState } from '../src/components/coastal';
+import { HarborBalance as CoastalBalance } from '../src/components/collaborative';
 import { Text } from '../src/components/typography';
 import React, { useEffect, useRef, useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
