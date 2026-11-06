@@ -1,3 +1,4 @@
+import { searchScuttle } from '../src/domain/scuttleSearch';
 import { LoadingRecords } from '../src/components/LoadingRecords';
 import { goalOverview } from '../src/domain/goalOverview';
 import { currentPaycheck, paycheckDestination } from '../src/domain/navigation';
@@ -44,26 +45,7 @@ export default function Dashboard() {
     if (walkthrough?.active && ['home-quick-views', 'home-next-payday'].includes(walkthroughSteps[walkthrough.index]?.target)) setQuickView('paycheck');
   }, [walkthrough?.active, walkthrough?.index]);
   const query = search.trim().toLowerCase();
-  const searchResults = useMemo(() => {
-    if (!query) return [];
-    const results: { label: string; detail: string; open: () => void }[] = [];
-    data.transactions.filter(item => `${item.description} ${item.type} ${item.date}`.toLowerCase().includes(query)).forEach(item => results.push({ label: item.description, detail: `${formatDateDisplay(item.date)} · ${formatMoney(item.amountCents)} · Transaction`, open: () => router.push({ pathname: '/transactions', params: { editId: item.id } }) }));
-    data.accounts.filter(item => item.name.toLowerCase().includes(query)).forEach(item => results.push({ label: item.name, detail: `${item.type} · Account`, open: () => router.push({ pathname: '/account/[id]', params: { id: item.id } }) }));
-    data.goals.filter(item => item.name.toLowerCase().includes(query)).forEach(item => results.push({ label: item.name, detail: 'Savings goal', open: () => router.push({ pathname: '/goal/[id]', params: { id: item.id } }) }));
-    data.categories.filter(item => item.name.toLowerCase().includes(query)).forEach(item => results.push({ label: item.name, detail: 'Budget category', open: () => router.push('/budget') }));
-    return results.slice(0, 8);
-  }, [data, query, router]);
-  const paycheckGroups = useMemo(() => {
-    if (!query) return [];
-    const queryMatchesSource = new Set(data.paychecks.filter(item => (item.source ?? '').trim().toLowerCase().includes(query)).map(item => (item.source ?? '').trim().toLowerCase()));
-    const matches = data.paychecks.filter(item => queryMatchesSource.has((item.source ?? '').trim().toLowerCase()) || item.receivedAt.includes(query));
-    const groups = new Map<string, typeof matches>();
-    matches.forEach(item => {
-      const key = item.source?.trim().toLowerCase() || 'other paychecks';
-      groups.set(key, [...(groups.get(key) ?? []), item]);
-    });
-    return [...groups.entries()].map(([, paychecks]) => ({ name: paychecks[0].source?.trim() || 'Other paychecks', paychecks }));
-  }, [data.paychecks, query]);
+  const searchResults = useMemo(() => searchScuttle(data, search), [data, search]);
 
   if (authConfigured && authLoading) return <LoadingRecords />;
   if (authConfigured && !authUser) return <Redirect href="/welcome" />;
@@ -98,8 +80,8 @@ export default function Dashboard() {
   return <Page title={`Good morning, ${greetingName}`} headerRight={headerRight}>
     <Feedback />
     {searchOpen ? <View style={{ gap: 10 }}>
-      <Field label="Search Scuttle" value={search} onChangeText={setSearch} placeholder="Transactions, accounts, goals, paychecks" />
-      {query ? <Card>{searchResults.map((item, index) => <Action key={index} label={`${item.label} · ${item.detail}`} variant="text" onPress={item.open} />)}{paycheckGroups.flatMap(group => group.paychecks.map(p => <Action key={p.id} label={`${group.name} · ${formatMoney(p.amountCents)}`} variant="text" onPress={() => router.push({ pathname: '/paycheck/[id]', params: { id: p.id } })} />))}{!searchResults.length && !paycheckGroups.length ? <Text style={{ color: muted }}>No matching records.</Text> : null}</Card> : null}
+      <Field label="Search Scuttle" value={search} onChangeText={setSearch} placeholder="Search names, amounts, dates, or pages" />
+      {query ? <Card>{searchResults.map(item => <Action key={item.key} label={`${item.label} · ${item.detail}`} variant="text" onPress={() => router.push(item.destination as Parameters<typeof router.push>[0])} />)}{!searchResults.length ? <Text style={{ color: muted }}>No matching records.</Text> : null}</Card> : null}
     </View> : null}
 
     <TourHighlight id="home-quick-views">
