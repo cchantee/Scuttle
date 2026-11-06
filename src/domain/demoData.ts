@@ -87,6 +87,8 @@ export function addSampleData(data: AppData, today = todayISODate()): StoreResul
   ];
   for (const record of contributions) { const error = add('contributions', record); if (error) return report(error); }
 
+  // Adding demonstration records must not archive the user's existing budgets.
+  next.paychecks = next.paychecks.map(p => data.paychecks.find(original => original.id === p.id) ?? p);
   return { data: next };
 }
 

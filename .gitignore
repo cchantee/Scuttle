@@ -15,3 +15,6 @@ coverage/
 
 expo-env.d.ts
 # @end expo-cli
+
+# Researcher credentials stay local.
+study.secrets.local

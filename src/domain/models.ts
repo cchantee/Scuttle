@@ -6,6 +6,8 @@ export interface InterestRateChange { effectiveDate: string; ratePercent: number
 
 export type PaydayFrequency = 'monthly' | 'weekly' | 'biweekly' | 'custom';
 export interface User {
+  /** Only resettable study snapshots pin the scenario clock. */
+  studySnapshotDate?: string;
   id: Id; displayName: string; nextPayday?: string; paydayFrequency?: PaydayFrequency; paydayIntervalDays?: number;
 }
 /** A paycheck can be kept standalone or linked directly as income to a virtual account. */
@@ -17,6 +19,8 @@ export interface BudgetCategory { id: Id; name: string }
 export interface BudgetAllocation { id: Id; paycheckId: Id; categoryId: Id; amountCents: number; subscriptionId?: Id }
 export interface Transaction {
   id: Id; description: string; amountCents: number; date: string; type: TransactionType;
+  /** Bills retain the existing expense/reminder ledger semantics. */
+  purpose?: 'bill';
   categoryId?: Id; allocationId?: Id; accountId?: Id; paycheckId?: Id; notes?: string;
   goalContributionId?: Id;
   /** Transfer is represented once and applies opposite signed effects to both accounts. */

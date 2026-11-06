@@ -106,3 +106,15 @@ describe('paycheck planning and reallocation', () => {
     expect(removeRecord(received, 'paychecks', 'p').error).toBeTruthy();
   });
 });
+
+it('archives the prior budget only after a planned paycheck is actually received', () => {
+  let d = fixture();
+  d = upsertRecord(d,'paychecks',{id:'prior',amountCents:100000,receivedAt:'2026-11-01',accountId:'checking'}).data;
+  const reviewed = apply(d,{type:'reviewReceipt',paycheckId:'p'});
+  expect(reviewed.data.paychecks.find(p=>p.id==='prior')!.budgetArchived).toBe(false);
+  const received = apply(reviewed.data,receive);
+  expect(received.error).toBeUndefined();
+  expect(received.data.paychecks.find(p=>p.id==='prior')!.budgetArchived).toBe(true);
+  expect(received.data.paychecks.find(p=>p.id==='p')!.budgetArchived).toBe(false);
+  expect(accountBalance(received.data,received.data.accounts[0])).toBe(215000);
+});

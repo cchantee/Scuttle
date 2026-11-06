@@ -1,3 +1,6 @@
+import { addSampleData, removeSampleData } from '../domain/demoData';
+import { AppState } from 'react-native';
+import { goalFundsHeld } from '../domain/goalFunds';
 import { applyPaycheckOperation, PaycheckOperation } from '../domain/paycheckOperations';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { AppData, emptyData, PaydayFrequency, Transaction, newId } from '../domain/models';
@@ -6,12 +9,13 @@ import { AsyncStorageAdapter } from '../storage/asyncStorage';
 import { isCloudConfigured, supabase } from '../backend/supabase';
 import { SupabaseStorageAdapter } from '../storage/supabaseStorage';
 import { normalizeDateInput } from '../domain/date';
-import { remainingForPaycheck } from '../domain/calculations';
+import { newestPaychecks, remainingForPaycheck } from '../domain/calculations';
 import { nextInterestPostingTransaction } from '../domain/interest';
 import { todayISODate } from '../domain/date';
-import { addSampleData, removeSampleData } from '../domain/demoData';
 
 interface DataContextValue {
+  loadSampleData: () => Promise<boolean>;
+  deleteSampleData: () => Promise<boolean>;
   paycheckOperation: (operation: PaycheckOperation) => Promise<boolean>;
   data: AppData; loading: boolean; error: string | null; saveRecord: (collection: CollectionName, record: any) => Promise<boolean>;
   deleteRecord: (collection: CollectionName, id: string) => Promise<boolean>; clearError: () => void;
@@ -20,8 +24,6 @@ interface DataContextValue {
   settleGoalContribution: (contributionId: string, transaction: Transaction) => Promise<boolean>;
   completeGoalContributionInAccount: (contributionId: string) => Promise<boolean>;
   postMonthlyInterest: (accountId: string) => Promise<boolean>;
-  loadSampleData: () => Promise<boolean>;
-  deleteSampleData: () => Promise<boolean>;
   saveNextPayday: (date?: string, frequency?: PaydayFrequency, intervalDays?: number) => Promise<boolean>;
   authConfigured: boolean; authLoading: boolean; authUser: { id: string; email?: string; displayName?: string; walkthroughNeeded: boolean } | null;
   signIn: (email: string, password: string) => Promise<{ userId: string; walkthroughNeeded: boolean }>; signUp: (email: string, password: string, displayName: string) => Promise<{ userId: string; hasSession: boolean }>; completeWalkthrough: () => Promise<void>; signOut: () => Promise<void>;
@@ -63,6 +65,30 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     });
     return () => { active = false; listener.subscription.unsubscribe(); };
   }, []);
+
+  // Reset markers are admin-owned metadata, separate from the financial fixture.
+  useEffect(() => {
+    if (!supabase || authUser?.email?.toLowerCase() !== 'jordan.taylor@example.com') return;
+    const client = supabase;
+    let active = true, checking = false;
+    const baseline = client.auth.getSession().then(({ data }) => data.session?.user.app_metadata?.scuttle_study_reset);
+    const checkReset = async () => {
+      if (!active || checking) return;
+      checking = true;
+      try {
+        const original = await baseline;
+        const { data: result, error } = await client.auth.getUser();
+        if (active && !error && result.user && result.user.app_metadata?.scuttle_study_reset !== original) {
+          await client.auth.signOut({ scope: 'local' });
+          if (active) { setAuthUser(null); dataRef.current = emptyData(); setData(emptyData()); }
+        }
+      } catch { /* Retry when connectivity returns. */ } finally { checking = false; }
+    };
+    void checkReset();
+    const timer = setInterval(() => void checkReset(), 15000);
+    const foreground = AppState.addEventListener('change', state => { if (state === 'active') void checkReset(); });
+    return () => { active = false; clearInterval(timer); foreground.remove(); };
+  }, [authUser?.id]);
 
   useEffect(() => {
     let active = true;
@@ -154,7 +180,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     const subscription = current.transactions.find(item => item.id === subscriptionId && item.type === 'subscription');
     if (!subscription) { setError('This subscription could not be found.'); return false; }
     if (!subscription.categoryId || !current.categories.some(item => item.id === subscription.categoryId)) { setError('Choose a budget category for this subscription before adding it to a paycheck plan.'); return false; }
-    const paycheck = [...current.paychecks].filter(item => !item.budgetArchived).sort((a, b) => b.receivedAt.localeCompare(a.receivedAt))[0];
+    const paycheck = newestPaychecks(current.paychecks.filter(item => !item.budgetArchived))[0];
     if (!paycheck) { setError('Add a paycheck before planning this subscription.'); return false; }
     if (current.allocations.some(item => item.subscriptionId === subscription.id && item.paycheckId === paycheck.id)) { setError('This subscription is already included in that paycheck plan.'); return false; }
     const result = upsertRecord(current, 'allocations', { id: newId(), paycheckId: paycheck.id, categoryId: subscription.categoryId, amountCents: subscription.amountCents, subscriptionId: subscription.id });
@@ -164,7 +190,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const settleGoalContribution = useCallback((contributionId: string, transaction: Transaction) => enqueue(async () => {
     const current = dataRef.current;
     const contribution = current.contributions.find(item => item.id === contributionId);
-    if (!contribution || contribution.status !== 'pending') { setError('This goal contribution is no longer pending.'); return false; }
+    if (!contribution || !goalFundsHeld(current, contribution)) { setError('This goal contribution is no longer pending.'); return false; }
     const result = transferGoalContribution(current, contributionId, transaction);
     if (result.error) { setError(result.error); return false; }
     return commit(result.data);
@@ -178,7 +204,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     const current = dataRef.current;
     const account = current.accounts.find(item => item.id === accountId);
     if (!account) { setError('This account could not be found.'); return false; }
-    const transaction = nextInterestPostingTransaction(current, account, todayISODate(), newId());
+    const transaction = nextInterestPostingTransaction(current, account, todayISODate(current.user), newId());
     if (!transaction) { setError('There is no completed monthly interest amount to post yet.'); return false; }
     const result = upsertRecord(current, 'transactions', transaction);
     if (result.error) { setError(result.error); return false; }
@@ -226,7 +252,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     const { error: authError } = await supabase.auth.signOut();
     if (authError) throw authError;
   }, []);
-  const value = useMemo(() => ({ data, loading, error, paycheckOperation, saveRecord, deleteRecord, saveNextPayday, loadSampleData, deleteSampleData, clearError: () => setError(null), reportError: (message: string) => setError(message), movePaycheckToAccount, planSubscription, settleGoalContribution, completeGoalContributionInAccount: completeGoalContribution, postMonthlyInterest, authConfigured: isCloudConfigured, authLoading, authUser, signIn, signUp, completeWalkthrough, signOut }), [data, loading, error, paycheckOperation, saveRecord, deleteRecord, saveNextPayday, loadSampleData, deleteSampleData, movePaycheckToAccount, planSubscription, settleGoalContribution, completeGoalContribution, postMonthlyInterest, authLoading, authUser, signIn, signUp, completeWalkthrough, signOut]);
+  const value = useMemo(() => ({ loadSampleData, deleteSampleData, data, loading, error, paycheckOperation, saveRecord, deleteRecord, saveNextPayday, clearError: () => setError(null), reportError: (message: string) => setError(message), movePaycheckToAccount, planSubscription, settleGoalContribution, completeGoalContributionInAccount: completeGoalContribution, postMonthlyInterest, authConfigured: isCloudConfigured, authLoading, authUser, signIn, signUp, completeWalkthrough, signOut }), [loadSampleData, deleteSampleData, data, loading, error, paycheckOperation, saveRecord, deleteRecord, saveNextPayday, movePaycheckToAccount, planSubscription, settleGoalContribution, completeGoalContribution, postMonthlyInterest, authLoading, authUser, signIn, signUp, completeWalkthrough, signOut]);
   return <Context.Provider value={value}>{children}</Context.Provider>;
 }
 export function useData() { const value = useContext(Context); if (!value) throw new Error('useData must be used inside DataProvider'); return value; }
