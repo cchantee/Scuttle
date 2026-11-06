@@ -9,7 +9,7 @@ async function main() {
   if (!['verify', 'verify-live', 'reset'].includes(command)) throw new Error('Usage: npm run study:jordan -- [verify|verify-live|reset]');
   if (command === 'verify') {
     verifyJordanTaylorStartingData(buildJordanTaylorSnapshot('fixture-validation-user'));
-    console.log('Local Jordan baseline verified: checking $245; savings $680 ($560 available); no historical overdrafts. Database readiness has not been checked.');
+    console.log('Local Jordan baseline verified: checking $245; savings $680 ($560 available); Cash $300; no historical overdrafts. Database readiness has not been checked.');
     return;
   }
   if (existsSync('study.secrets.local')) process.loadEnvFile('study.secrets.local');
