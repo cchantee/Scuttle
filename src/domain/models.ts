@@ -19,6 +19,8 @@ export interface BudgetCategory { id: Id; name: string }
 export interface BudgetAllocation { id: Id; paycheckId: Id; categoryId: Id; amountCents: number; subscriptionId?: Id }
 export interface Transaction {
   id: Id; description: string; amountCents: number; date: string; type: TransactionType;
+  /** Bills retain the existing expense/reminder ledger semantics. */
+  purpose?: 'bill';
   categoryId?: Id; allocationId?: Id; accountId?: Id; paycheckId?: Id; notes?: string;
   goalContributionId?: Id;
   /** Transfer is represented once and applies opposite signed effects to both accounts. */
