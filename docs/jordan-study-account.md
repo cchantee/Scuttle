@@ -76,3 +76,6 @@ When a new current paycheck is received, older received paycheck budgets are arc
 
 ### Sign-out after reset
 Reset also changes Jordan’s admin-owned session reset marker. Updated interfaces sign Jordan out within 15 seconds while online, or when the app returns to the foreground. Offline devices sign out once they reconnect. Credentials and account identity remain unchanged; a new sign-in starts the next participant session. No database migration is needed.
+
+### Cash starting balance
+Jordan’s default study fixture includes **Cash**, type cash, with a $300 opening and ending balance. This is separate cash on hand: no income or bank transfer is created. The reset restores checking $245, savings $680 ($120 reserved), and Cash $300. Participant tasks remain incomplete.
