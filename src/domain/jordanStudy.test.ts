@@ -258,3 +258,15 @@ describe('researcher-only Jordan reset', () => {
     expect(mock.writes).not.toHaveBeenCalled();
   });
 });
+
+ it('starts Cash at $300 without moving money from checking or savings', () => {
+  const data = buildJordanTaylorSnapshot('cash-fixture-test');
+  const cash = data.accounts.find(account => account.name === 'Cash')!;
+  expect(cash.type).toBe('cash');
+  expect(cash.initialBalanceCents).toBe(30000);
+  expect(accountBalance(data, cash)).toBe(30000);
+  expect(availableAccountBalance(data, cash)).toBe(30000);
+  expect(data.transactions.some(t => t.accountId === cash.id || t.toAccountId === cash.id)).toBe(false);
+  expect(data.paychecks.some(p => p.accountId === cash.id)).toBe(false);
+  verifyJordanTaylorStartingData(data);
+ });
