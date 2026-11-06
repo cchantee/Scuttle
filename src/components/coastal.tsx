@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { AccessibilityInfo, Animated, Image, View } from 'react-native';
+import { AccessibilityInfo, Animated, Image, Platform, View } from 'react-native';
 import Svg, { Path, Circle, Ellipse } from 'react-native-svg';
 import { colors } from '../design/theme';
 import { Text } from './typography';
@@ -16,9 +16,9 @@ export function Crab({ animate = false, size = 76 }: { animate?: boolean; size?:
   useEffect(() => {
     if (!animate || reduced) { offset.setValue(0); return; }
     const motion = Animated.sequence([
-      Animated.timing(offset, { toValue: -9, duration: 350, useNativeDriver: true }),
-      Animated.timing(offset, { toValue: 9, duration: 650, useNativeDriver: true }),
-      Animated.timing(offset, { toValue: 0, duration: 350, useNativeDriver: true }),
+      Animated.timing(offset, { toValue: -9, duration: 350, useNativeDriver: Platform.OS !== 'web' }),
+      Animated.timing(offset, { toValue: 9, duration: 650, useNativeDriver: Platform.OS !== 'web' }),
+      Animated.timing(offset, { toValue: 0, duration: 350, useNativeDriver: Platform.OS !== 'web' }),
     ]);
     motion.start();
     return () => { motion.stop(); offset.setValue(0); };
@@ -50,17 +50,17 @@ export function Completion({ message = 'Your money has a plan.' }: { message?: s
 
 /** User-directed watercolor variant of the existing doodle crab; no embedded text. */
 export function CoastalScene({ height = 96, detail = false }: { height?: number; detail?: boolean }) {
-  return <View accessible={false} style={{ width: '100%', height, overflow: 'hidden' }}><Image accessible={false} source={require('../../assets/coastal/shoreline-watercolor-v2.png')} resizeMode="contain" style={detail ? { position: 'absolute', width: 360, height: 120, right: -25, bottom: -4 } : { width: '100%', height }} /></View>;
+  return <View accessible={false} style={{ width: '100%', height, overflow: 'hidden' }}><Image accessible={false} source={require('../../assets/coastal/shoreline-watercolor-v2.png')} resizeMode={detail ? "contain" : "cover"} style={detail ? { position: 'absolute', width: 360, height: 120, right: -25, bottom: -4 } : { position: 'absolute', width: '100%', height: Math.round(height * 1.6), bottom: 0 }} /></View>;
 }
 
 /** Reference-format financial card: clear text above a full-width coastal illustration. */
 export function CoastalBalance({ title, amount, subtitle }: { title: string; amount: string; subtitle?: string }) {
-  return <View style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 10, backgroundColor: colors.surface, minHeight: 160, padding: 16, overflow: 'hidden' }}>
-    <View pointerEvents="none" style={{ position: 'absolute', left: -2, right: -2, bottom: -6 }}><CoastalScene height={122} /></View>
-    <View style={{ gap: 8, alignItems: 'flex-start', paddingBottom: 28 }}>
-      <Text style={{ fontSize: 16 }}>{title}</Text>
-      <Text role="money" style={{ fontSize: 33 }}>{amount}</Text>
-      {subtitle ? <Text style={{ fontSize: 13, color: colors.muted, maxWidth: '60%' }}>{subtitle}</Text> : null}
+  return <View style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 20, backgroundColor: colors.mist, overflow: 'hidden' }}>
+    <View style={{ paddingHorizontal: 20, paddingTop: 22, gap: 8 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}><Text style={{ fontSize: 13, color: colors.muted, flex: 1 }}>{title}</Text></View>
+      <Text role="money" style={{ fontSize: 37, letterSpacing: -0.8 }}>{amount}</Text>
+      {subtitle ? <Text style={{ fontSize: 13, color: colors.muted }}>{subtitle}</Text> : null}
     </View>
+    <CoastalScene height={108} />
   </View>;
 }

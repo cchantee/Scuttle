@@ -43,7 +43,7 @@ describe('paycheck, allocation, and savings calculations',()=>{
     expect(expense.data.transactions.find(item=>item.id==='auto-expense')?.allocationId).toBe('a-groceries-new');
     const archived=upsertRecord(withSecondAllocation,'paychecks',{...withSecondAllocation.paychecks.find(item=>item.id==='p2')!,budgetArchived:true}).data;
     const withoutActiveBudget=upsertRecord(archived,'transactions',{id:'unbudgeted-expense',description:'Coffee',amountCents:500,date:'2026-10-16',type:'expense',categoryId:'groceries'});
-    expect(withoutActiveBudget.data.transactions.find(item=>item.id==='unbudgeted-expense')?.allocationId).toBe('a-groceries');
+    expect(withoutActiveBudget.data.transactions.find(item=>item.id==='unbudgeted-expense')?.allocationId).toBeUndefined();
   });
   it('shows all active paycheck allocations and excludes archived paycheck budgets',()=>{
     const d=scenario();

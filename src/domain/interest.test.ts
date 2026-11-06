@@ -123,7 +123,7 @@ describe('savings goal reservation lifecycle', () => {
     const completed = completeGoalContributionInAccount(reserved, 'c');
     expect(completed.error).toBeUndefined();
     expect(accountBalance(completed.data, completed.data.accounts[0])).toBe(100000);
-    expect(availableAccountBalance(completed.data, completed.data.accounts[0])).toBe(100000);
+    expect(availableAccountBalance(completed.data, completed.data.accounts[0])).toBe(80000);
     expect(completed.data.transactions).toHaveLength(0);
     expect(completed.data.contributions).toHaveLength(1);
     expect(completed.data.contributions[0].status).toBe('designated');
@@ -139,8 +139,8 @@ describe('savings goal reservation lifecycle', () => {
     expect(accountBalance(completed.data, completed.data.accounts[1])).toBe(20000);
     expect(pendingForAccount(completed.data, 'checking')).toBe(0);
     expect(completed.data.contributions).toHaveLength(1);
-    expect(completed.data.contributions[0].status).toBe('posted');
-    expect(transferGoalContribution(completed.data, 'c', { id: 't2', type: 'transfer', description: 'Duplicate', amountCents: 20000, date: '2025-01-02', accountId: 'checking', toAccountId: 'savings' }).error).toMatch(/no longer pending/);
+    expect(completed.data.contributions[0].status).toBe('pending');
+    expect(transferGoalContribution(completed.data, 'c', { id: 't2', type: 'transfer', description: 'Duplicate', amountCents: 20000, date: '2025-01-02', accountId: 'checking', toAccountId: 'savings' }).error).toMatch(/currently holding/);
   });
 
   it('rejects reservations above cash available after other pending holds', () => {

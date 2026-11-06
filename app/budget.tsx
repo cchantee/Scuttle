@@ -4,7 +4,7 @@ import { colors } from '../src/design/theme';
 import { Text } from '../src/components/typography';
 import React, { useEffect, useRef, useState } from 'react';
 
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useIsFocused, useLocalSearchParams, useRouter } from 'expo-router';
 import { TourHighlight } from '../src/components/walkthrough';
 import { Card, ProgressBar, SectionTitle, Action, Field, Feedback, Page, RecordLine, SelectId } from '../src/components/ui';
 import { useCrud } from '../src/components/hooks';
@@ -26,25 +26,24 @@ export default function Budget() {
   const [categoryId, setCategory] = useState('');
   const [amount, setAmount] = useState('');
   const initializedAllocation = useRef('');
-  const upcomingPayday = data.user.nextPayday && data.user.paydayFrequency ? calculateNextPayday(data.user.nextPayday, todayISODate(), data.user.paydayFrequency, data.user.paydayIntervalDays) : data.user.nextPayday;
-  const upcomingSubscriptions = data.transactions.filter(item => item.type === 'subscription').map(item => ({ item, dueDate: nextSubscriptionDue(item, todayISODate()) })).filter((row): row is { item: typeof data.transactions[number]; dueDate: string } => !!row.dueDate && (!upcomingPayday || row.dueDate <= upcomingPayday)).sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+  const focused = useIsFocused();
+  const upcomingPayday = data.user.nextPayday && data.user.paydayFrequency ? calculateNextPayday(data.user.nextPayday, todayISODate(data.user), data.user.paydayFrequency, data.user.paydayIntervalDays) : data.user.nextPayday;
+  const upcomingSubscriptions = data.transactions.filter(item => item.type === 'subscription').map(item => ({ item, dueDate: nextSubscriptionDue(item, todayISODate(data.user)) })).filter((row): row is { item: typeof data.transactions[number]; dueDate: string } => !!row.dueDate && (!upcomingPayday || row.dueDate <= upcomingPayday)).sort((a, b) => a.dueDate.localeCompare(b.dueDate));
   const planPaycheck = [...data.paychecks].filter(item => !item.budgetArchived).sort((a, b) => b.receivedAt.localeCompare(a.receivedAt))[0];
 
   useEffect(() => {
+    if (!focused) { initializedAllocation.current = ''; return; }
+    if (loading) return;
+    const key = `${params.paycheckId || ''}|${params.allocationId || ''}|${params.add || ''}`;
+    if (initializedAllocation.current === key) return;
+    setName(''); setPaycheck(''); setCategory(''); setAmount(''); categoryCrud.cancel(); allocationCrud.cancel(); setCategoryFormOpen(false); setAllocationFormOpen(false);
     if (params.add === '1') setAllocationFormOpen(true);
     if (params.paycheckId) { setPaycheck(params.paycheckId); setAllocationFormOpen(true); }
-    if (!loading && params.allocationId && initializedAllocation.current !== params.allocationId) {
-      const allocation = data.allocations.find(item => item.id === params.allocationId);
-      if (allocation) {
-        setPaycheck(allocation.paycheckId);
-        setCategory(allocation.categoryId);
-        setAmount((allocation.amountCents / 100).toFixed(2));
-        allocationCrud.setEditingId(allocation.id);
-        setAllocationFormOpen(true);
-        initializedAllocation.current = allocation.id;
-      }
-    }
-  }, [params.paycheckId, params.allocationId, params.add, data.allocations, loading]);
+    const allocation = data.allocations.find(item => item.id === params.allocationId);
+    if (params.allocationId && !allocation) return;
+    if (allocation) { setPaycheck(allocation.paycheckId); setCategory(allocation.categoryId); setAmount((allocation.amountCents / 100).toFixed(2)); allocationCrud.setEditingId(allocation.id); setAllocationFormOpen(true); }
+    initializedAllocation.current = key;
+  }, [focused, loading, params.paycheckId, params.allocationId, params.add, data.allocations]);
 
   const clearCategory = () => { setName(''); categoryCrud.cancel(); setCategoryFormOpen(false); };
   const categorySave = async () => {
@@ -84,15 +83,15 @@ export default function Budget() {
   }
 
   return <Page title="Budget"><TourHighlight id="budget-main"><Feedback />
-    <Text>Categories and allocations are tracked separately for each paycheck.</Text>
+
     <Card style={{ borderTopWidth: 4, borderTopColor: colors.blue, gap: 16 }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
         <IconTile name="calendar" tint={colors.glass} />
-        <Text accessibilityRole="header" style={{ flex: 1, fontSize: 23 }}>Upcoming subscriptions</Text>
-        {upcomingSubscriptions.length ? <View style={{ backgroundColor: colors.mist, minWidth: 30, minHeight: 30, borderRadius: 8, paddingHorizontal: 8, alignItems: 'center', justifyContent: 'center' }}><Text accessibilityLabel={`${upcomingSubscriptions.length} upcoming subscriptions`} style={{ fontSize: 15 }}>{upcomingSubscriptions.length}</Text></View> : null}
+        <Text accessibilityRole="header" style={{ flex: 1, fontSize: 23 }}>Bills & subscriptions</Text>
+        {upcomingSubscriptions.length ? <View style={{ backgroundColor: colors.mist, minWidth: 30, minHeight: 30, borderRadius: 8, paddingHorizontal: 8, alignItems: 'center', justifyContent: 'center' }}><Text accessibilityLabel={`${upcomingSubscriptions.length} upcoming bills and subscriptions`} style={{ fontSize: 15 }}>{upcomingSubscriptions.length}</Text></View> : null}
       </View>
-      <View style={{ backgroundColor: colors.glass, borderRadius: 8, padding: 12 }}><Text style={{ fontSize: 16, lineHeight: 23 }}>Budget for these scheduled charges before they are due.</Text></View>
-    {!upcomingSubscriptions.length ? <Text>No upcoming subscription charges before your next payday.</Text> : upcomingSubscriptions.map(({ item, dueDate }) => {
+
+    {!upcomingSubscriptions.length ? <Text>No upcoming bills or subscriptions before your next payday.</Text> : upcomingSubscriptions.map(({ item, dueDate }) => {
       const planned = !!planPaycheck && data.allocations.some(allocation => allocation.subscriptionId === item.id && allocation.paycheckId === planPaycheck.id);
       return <React.Fragment key={item.id}><RecordLine title={item.description} detail={`${formatMoney(item.amountCents)} · Due ${formatDateDisplay(dueDate)}${item.categoryId ? ` · ${data.categories.find(category => category.id === item.categoryId)?.name ?? 'Category'}` : ''}${item.accountId ? ` · ${data.accounts.find(account => account.id === item.accountId)?.name ?? 'Account'}` : ''}`} onEdit={() => router.push({ pathname: '/transactions', params: { editId: item.id } })} onDelete={() => router.push({ pathname: '/transactions', params: { editId: item.id } })} />{planned ? <Text>Included in paycheck plan · {formatDateDisplay(planPaycheck!.receivedAt)}</Text> : <Action label="Add to paycheck plan" onPress={() => void planSubscription(item.id)} />}</React.Fragment>;
     })}
@@ -134,5 +133,5 @@ export default function Budget() {
 function AllocationLine({ allocation, data, router, onEdit, onDelete }: { allocation: (typeof data.allocations)[number]; data: ReturnType<typeof useData>['data']; router: ReturnType<typeof useRouter>; onEdit: () => void; onDelete: () => void }) {
   const summary = allocationSummary(data, allocation);
   const category = data.categories.find(item => item.id === allocation.categoryId);
-  return <RecordLine title={category?.name ?? 'Unknown category'} detail={`${formatMoney(summary.allocatedCents)} allocated · ${formatMoney(summary.spentCents)} spent · ${formatMoney(summary.remainingCents)} left`} onView={() => router.push({ pathname: '/allocation/[id]', params: { id: allocation.id } })} onEdit={onEdit} onDelete={onDelete} />;
+  return <RecordLine title={category?.name ?? 'Unknown category'} detail={`${formatMoney(summary.allocatedCents)} allocated · ${formatMoney(summary.spentCents)} spent · ${formatMoney(summary.remainingCents)} ${summary.remainingCents < 0 ? 'remaining · Over budget' : 'left'}`} onView={() => router.push({ pathname: '/allocation/[id]', params: { id: allocation.id } })} onEdit={onEdit} onDelete={onDelete} />;
 }

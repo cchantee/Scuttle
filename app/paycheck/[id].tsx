@@ -1,3 +1,4 @@
+import { colors } from '../../src/design/theme';
 import React, { useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { Link, useLocalSearchParams, useRouter } from 'expo-router';
@@ -31,7 +32,7 @@ export default function PaycheckDetail() {
     headerRight={<Pressable accessibilityRole="button" accessibilityLabel="Paycheck actions" accessibilityState={{ expanded: menu }} onPress={() => setMenu(!menu)} style={{ minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}><Icon name="more" /></Pressable>}
     footer={<Action label="+ Add Allocation" variant="primary" fullWidth onPress={() => router.push({ pathname: '/budget', params: { paycheckId: id } })} />}>
     <Feedback />
-    {menu ? <Card><Action label="Edit paycheck" onPress={edit} />{!planned ? <Action label="Move money in this plan" onPress={() => router.push('/move-money')} /> : null}<Action label="Finish budgeting" onPress={() => { if (left < 0) reportError('Review the amounts above this paycheck before finishing.'); else { setComplete(true); setMenu(false); } }} /></Card> : null}
+    {menu ? <Card><Action label="All paychecks" onPress={() => router.push('/paychecks')} /><Action label="Edit paycheck" onPress={edit} />{!planned ? <Action label="Move money in this plan" onPress={() => router.push('/move-money')} /> : null}<Action label="Finish budgeting" onPress={() => { if (left < 0) reportError('Review the amounts above this paycheck before finishing.'); else { setComplete(true); setMenu(false); } }} /></Card> : null}
     <View style={{ gap: 12, paddingVertical: 8 }}>
       <Text style={{ fontSize: 16 }}>Paycheck Amount</Text>
       <Pressable accessibilityRole="button" accessibilityLabel="Edit paycheck amount" onPress={edit} style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}><Text role="money" style={{ fontSize: 36 }}>{formatMoney(paycheck.amountCents)}</Text><Text style={{ color: '#69777A' }}>✎</Text></Pressable>
@@ -39,7 +40,7 @@ export default function PaycheckDetail() {
       <ProgressBar value={allocated} max={paycheck.amountCents} />
       <Text style={{ fontSize: 14, color: '#69777A' }}>{Math.round(allocated / paycheck.amountCents * 100)}% allocated</Text>
     </View>
-    <Card style={{ backgroundColor: '#FAF9F6', paddingBottom: 8 }}><View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}><View style={{ flex: 1, gap: 10 }}><Text>Left to Assign</Text><Text role="money" style={{ fontSize: 29 }}>{formatMoney(left)}</Text></View><View style={{ width: 145 }}><CoastalScene height={90} detail /></View></View></Card>
+    <Card style={{ backgroundColor: colors.shell, paddingBottom: 8, overflow: 'hidden' }}><View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}><View style={{ flex: 1, gap: 10 }}><Text>Left to Assign</Text><Text role="money" style={{ fontSize: 33, color: colors.text }}>{formatMoney(left)}</Text></View><View style={{ width: 145 }}><CoastalScene height={90} detail /></View></View></Card>
     {planned ? <Action label="Mark as received" onPress={() => router.push({ pathname: '/paychecks', params: { paycheckId: id, receive: '1' } })} /> : null}
     {complete ? <><Completion /><Action label="Return Home" variant="primary" fullWidth onPress={() => router.replace('/')} /></> : null}
     <SectionTitle right={<Action label="Edit" variant="text" onPress={() => router.push({ pathname: '/budget', params: { paycheckId: id } })} />}>Allocations</SectionTitle>
@@ -50,7 +51,7 @@ export default function PaycheckDetail() {
         const name = data.categories.find(c => c.id === a.categoryId)?.name ?? 'Category';
         return <View key={a.id} style={{ borderBottomWidth: 1, borderColor: '#E9E7E2' }}>
           <Pressable accessibilityRole="button" accessibilityLabel={`Open ${name} allocation`} onPress={() => router.push({ pathname: '/allocation/[id]', params: { id: a.id } })} style={{ minHeight: 68, flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10 }}>
-            <IconTile name={categoryIcon(name)} tint="#DCE7DA" /><View style={{ flex: 1, gap: 5 }}><Text style={{ fontSize: 18 }}>{name}</Text><Text style={{ fontSize: 13, color: '#69777A' }}>{formatMoney(summary.remainingCents)} left</Text></View><View style={{ alignItems: 'flex-end', gap: 5 }}><Text role="money" style={{ fontSize: 21 }}>{formatMoney(a.amountCents)}</Text><Text style={{ color: '#69777A', fontSize: 12 }}>{a.amountCents ? Math.round(summary.spentCents / a.amountCents * 100) : 0}% used</Text></View><Text>›</Text>
+            <IconTile name={categoryIcon(name)} tint="#DCE7DA" /><View style={{ flex: 1, gap: 5 }}><Text style={{ fontSize: 16, fontWeight: '500' }}>{name}</Text><Text style={{ fontSize: 13, color: '#69777A' }}>{formatMoney(summary.remainingCents)} {summary.remainingCents < 0 ? 'over budget' : 'left'}</Text></View><View style={{ alignItems: 'flex-end', gap: 5 }}><Text role="money" style={{ fontSize: 18 }}>{formatMoney(a.amountCents)}</Text><Text style={{ color: '#69777A', fontSize: 12 }}>{a.amountCents ? Math.round(summary.spentCents / a.amountCents * 100) : 0}% used</Text></View><Text>›</Text>
           </Pressable>
         </View>;
       })}

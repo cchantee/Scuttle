@@ -26,7 +26,7 @@ export default function AllocationDetail() {
   const expenses = data.transactions.filter(item => item.allocationId === allocation.id).sort((a, b) => b.date.localeCompare(a.date));
   return <Page title={category?.name ?? 'Budget category'}><Feedback />
     <Card><View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}><IconTile name="category" /><Text style={{ fontSize: 24 }}>{category?.name}</Text></View>
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 20 }}>{[{ label: 'Budgeted', value: summary.allocatedCents }, { label: 'Spent', value: summary.spentCents }, { label: 'Left', value: summary.remainingCents }].map(item => <View key={item.label} style={{ flex: 1, minWidth: 70, gap: 8 }}><Text style={{ color: '#69777A', fontSize: 14 }}>{item.label}</Text><Text role="money" style={{ fontSize: 23 }}>{formatMoney(item.value)}</Text></View>)}</View>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 20 }}>{[{ label: 'Budgeted', value: summary.allocatedCents }, { label: 'Spent', value: summary.spentCents }, { label: summary.remainingCents < 0 ? 'Over budget' : 'Left', value: summary.remainingCents }].map(item => <View key={item.label} style={{ flex: 1, minWidth: 70, gap: 8 }}><Text style={{ color: '#69777A', fontSize: 14 }}>{item.label}</Text><Text role="money" style={{ fontSize: 23 }}>{formatMoney(item.value)}</Text></View>)}</View>
       <ProgressBar value={summary.spentCents} max={summary.allocatedCents} color="#D58A71" />
       <Text style={{ color: '#69777A', fontSize: 14 }}>Paycheck {paycheck ? formatDateDisplay(paycheck.receivedAt) : 'not found'} · {summary.allocatedCents ? Math.round(summary.spentCents / summary.allocatedCents * 100) : 0}% used</Text>
     </Card>

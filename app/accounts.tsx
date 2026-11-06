@@ -2,7 +2,7 @@ import { Card } from '../src/components/ui';
 import { EmptyState, CoastalBalance } from '../src/components/coastal';
 import { Text } from '../src/components/typography';
 import React, { useEffect, useRef, useState } from 'react';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useIsFocused, useLocalSearchParams, useRouter } from 'expo-router';
 
 import { Action, Field, Feedback, Page, RecordLine } from '../src/components/ui';
 import { useCrud } from '../src/components/hooks';
@@ -20,9 +20,10 @@ const types: { id: AccountType; label: string }[] = [
 export default function Accounts() {
   const crud = useCrud('accounts');
   const router = useRouter();
-  const { data, reportError } = useData();
+  const { data, loading, reportError } = useData();
   const params = useLocalSearchParams<{ accountId?: string }>();
   const initializedId = useRef('');
+  const focused = useIsFocused();
   const [formOpen, setFormOpen] = useState(false);
   const [name, setName] = useState('');
   const [type, setType] = useState<AccountType>('checking');
@@ -30,12 +31,16 @@ export default function Accounts() {
   const [interestRate, setInterestRate] = useState('');
   const [notes, setNotes] = useState('');
   useEffect(() => {
-    if (!params.accountId || initializedId.current === params.accountId) return;
+    if (!focused) { initializedId.current = ''; return; }
+    if (loading) return;
+    const key = params.accountId || 'list';
+    if (initializedId.current === key) return;
+    reset();
     const account = data.accounts.find(item => item.id === params.accountId);
-    if (!account) return;
-    setName(account.name); setType(account.type); setBalance((account.initialBalanceCents / 100).toFixed(2)); setInterestRate(account.interestRatePercent?.toString() ?? ''); setNotes(account.notes ?? '');
-    crud.setEditingId(account.id); setFormOpen(true); initializedId.current = account.id;
-  }, [params.accountId, data.accounts]);
+    if (params.accountId && !account) return;
+    if (account) { setName(account.name); setType(account.type); setBalance((account.initialBalanceCents / 100).toFixed(2)); setInterestRate(account.interestRatePercent?.toString() ?? ''); setNotes(account.notes ?? ''); crud.setEditingId(account.id); setFormOpen(true); }
+    initializedId.current = key;
+  }, [focused, loading, params.accountId, data.accounts]);
   const reset = () => { setName(''); setType('checking'); setBalance('0.00'); setInterestRate(''); setNotes(''); crud.cancel(); setFormOpen(false); };
   const submit = async () => {
     try {

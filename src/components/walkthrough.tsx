@@ -8,7 +8,7 @@ const ink = '#344447';
 const muted = '#69777A';
 export const walkthroughSteps = [
   { route: '/', target: 'nav-home', title: 'Home', body: 'Your paycheck plan and key updates live here.', placement: 'bottom' },
-  { route: '/', target: 'home-quick-views', title: 'View Focus', body: 'Switch between your paycheck, account balances, and completed savings.', placement: 'bottom' },
+  { route: '/', target: 'home-quick-views', title: 'View Focus', body: 'Switch between your paycheck, account balances, and money set aside for goals, including labeled reservations.', placement: 'bottom' },
   { route: '/', target: 'home-next-payday', title: 'Next payday', body: 'Set a date and pay schedule for your countdown.', placement: 'bottom' },
   { route: '/', target: 'nav-add', title: 'Add menu', body: 'Use + to add transactions, plan paychecks, manage budgets, or fund goals.', placement: 'top' },
   { route: '/', target: 'nav-add-transaction', title: 'Add Transaction', body: 'Record spending or income with an amount, date, and account.', placement: 'top' },

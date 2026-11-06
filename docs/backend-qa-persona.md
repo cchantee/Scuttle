@@ -28,7 +28,7 @@ The auditor treats financial records as a ledger. It checks amounts in integer c
 | Savings goals | Initial amounts, contribution edits/deletes, pending reservations, same-account designation, cross-account transfer, no duplicated balance change, blocked deletion with dependencies |
 | Interest | Savings APY effective daily compounding, card APR/365 estimate, effective-dated rates, balance changes within a month, month-end posting uniqueness, accrued vs posted amounts |
 | Quick View calculations | Cash and available totals use shared calculations; card debt is separate; savings totals exclude pending contributions and aggregate all targets |
-| In-app sample data | Connected sample records load once, existing records are preserved, generated totals match expected calculations, and deletion is atomic and dependency-safe |
+| Jordan study reset | Exact baseline restoration, owner-scoped atomic updates, unchanged authentication, repeated resets, historical account reconciliation, and incomplete participant tasks |
 | History and search records | Source records remain consistent and association IDs resolve; route-level filtering is a UI check |
 | Persistence and upgrades | v1 to v2 snapshot migration preserves existing records; AsyncStorage and Supabase adapter behavior is checked with the integration procedure |
 | Authentication and sync | See the configured Supabase integration checklist; requires a project and test accounts |

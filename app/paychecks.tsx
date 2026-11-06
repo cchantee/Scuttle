@@ -2,7 +2,7 @@ import { Card, ProgressBar, SectionTitle } from '../src/components/ui';
 import { Completion, EmptyState } from '../src/components/coastal';
 import { Text } from '../src/components/typography';
 import React, { useEffect, useRef, useState } from 'react';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useIsFocused, useLocalSearchParams, useRouter } from 'expo-router';
 import { View } from 'react-native';
 import { Action, DateField, Field, Feedback, Page, RecordLine, SelectId } from '../src/components/ui';
 import { useCrud } from '../src/components/hooks';
@@ -16,28 +16,34 @@ import { TourHighlight } from '../src/components/walkthrough';
 export default function Paychecks() {
   const crud = useCrud('paychecks');
   const router = useRouter();
-  const { data, saveRecord, receivePaycheck, movePaycheckToAccount, reportError } = useData();
+  const { data, loading, saveRecord, receivePaycheck, movePaycheckToAccount, reportError } = useData();
   const params = useLocalSearchParams<{ paycheckId?: string; add?: string; receive?: string }>();
   const initializedId = useRef('');
+  const focused = useIsFocused();
   const saving = useRef(false);
   const [status, setStatus] = useState<'planned' | 'received'>('received');
   const [savedId, setSavedId] = useState('');
   const [formOpen, setFormOpen] = useState(false);
   const [amount, setAmount] = useState('');
-  const [date, setDate] = useState(todayDateInput());
+  const [date, setDate] = useState(todayDateInput(data.user));
   const [source, setSource] = useState('');
   const [notes, setNotes] = useState('');
   const [fundingMode, setFundingMode] = useState<'paycheck' | 'account' | ''>('');
   const [accountId, setAccountId] = useState('');
-  useEffect(() => { if (params.add === '1' && !params.paycheckId) setFormOpen(true); }, [params.add, params.paycheckId]);
   useEffect(() => {
-    if (!params.paycheckId || initializedId.current === params.paycheckId) return;
+    if (!focused) { initializedId.current = ''; return; }
+    if (loading) return;
+    const key = `${params.paycheckId || ''}|${params.add || ''}|${params.receive || ''}`;
+    if (initializedId.current === key) return;
+    reset(); setSavedId('');
     const paycheck = data.paychecks.find(item => item.id === params.paycheckId);
-    if (!paycheck) return;
-    setStatus(params.receive === '1' && paycheck.status === 'planned' ? 'received' : paycheck.status ?? 'received'); setAmount((paycheck.amountCents / 100).toFixed(2)); setDate(formatDateInput(paycheck.receivedAt)); setSource(paycheck.source ?? ''); setNotes(paycheck.notes ?? ''); setAccountId(paycheck.remainingAccountId ?? paycheck.accountId ?? ''); setFundingMode(params.receive === '1' || paycheck.accountId ? 'account' : 'paycheck');
-    crud.setEditingId(paycheck.id); setFormOpen(true); initializedId.current = paycheck.id;
-  }, [params.paycheckId, data.paychecks]);
-  const reset = () => { setStatus('received'); setAmount(''); setDate(todayDateInput()); setSource(''); setNotes(''); setAccountId(''); setFundingMode(''); crud.cancel(); setFormOpen(false); };
+    if (params.paycheckId && !paycheck) return;
+    if (paycheck) {
+      setStatus(params.receive === '1' && paycheck.status === 'planned' ? 'received' : paycheck.status ?? 'received'); setAmount((paycheck.amountCents / 100).toFixed(2)); setDate(formatDateInput(paycheck.receivedAt)); setSource(paycheck.source ?? ''); setNotes(paycheck.notes ?? ''); setAccountId(paycheck.remainingAccountId ?? paycheck.accountId ?? ''); setFundingMode(params.receive === '1' || paycheck.accountId ? 'account' : 'paycheck'); crud.setEditingId(paycheck.id); setFormOpen(true);
+    } else setFormOpen(params.add === '1');
+    initializedId.current = key;
+  }, [focused, loading, params.paycheckId, params.add, params.receive, data.paychecks]);
+  const reset = () => { setStatus('received'); setAmount(''); setDate(todayDateInput(data.user)); setSource(''); setNotes(''); setAccountId(''); setFundingMode(''); crud.cancel(); setFormOpen(false); };
   const submit = async () => {
     if (saving.current) return;
     saving.current = true;

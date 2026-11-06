@@ -1,6 +1,7 @@
+import { View } from 'react-native';
 import { Card, SectionTitle } from '../../src/components/ui';
 import { IconTile } from '../../src/components/icons';
-import { CoastalScene } from '../../src/components/coastal';
+import { CoastalBalance, CoastalScene } from '../../src/components/coastal';
 import { Text } from '../../src/components/typography';
 import React, { useState } from 'react';
 import { Link, useLocalSearchParams, useRouter } from 'expo-router';
@@ -27,12 +28,11 @@ export default function AccountDetail() {
   const pendingContributions = data.contributions.filter(item => item.accountId === account.id && item.status === 'pending');
   const available = availableAccountBalance(data, account);
   const earnsInterest = account.type === 'savings' || account.type === 'high_yield_savings' || account.type === 'credit_card';
-  const accruedInterest = earnsInterest ? accruedInterestCents(data, account, todayISODate()) : 0;
-  const postingPreview = earnsInterest ? nextInterestPostingPreview(data, account, todayISODate()) : null;
+  const accruedInterest = earnsInterest ? accruedInterestCents(data, account, todayISODate(data.user)) : 0;
+  const postingPreview = earnsInterest ? nextInterestPostingPreview(data, account, todayISODate(data.user)) : null;
   const creditedInterest = transactions.filter(item => !!item.interestPosting).reduce((sum, item) => sum + item.amountCents, 0);
-  return <Page title={account.name}><Feedback />
-    <Card style={{ alignItems: 'center' }}><IconTile name="accounts" /><Text>{account.type === 'credit_card' ? 'Outstanding balance' : 'Account balance'}</Text>
-    <Text role="money" style={{ fontSize: 36 }}>{formatMoney(accountBalance(data, account))}</Text><CoastalScene height={110} /></Card>
+  return <Page title={account.name} headerRight={<Action label="Edit" variant="text" onPress={() => router.push({ pathname: '/accounts', params: { accountId: account.id } })} />}><Feedback />
+    <CoastalBalance title={account.type === 'credit_card' ? 'Outstanding balance' : 'Current balance'} amount={formatMoney(accountBalance(data, account))} subtitle={account.type === 'credit_card' ? 'Credit card debt' : account.type.replace(/_/g, ' ')} />
     {pendingForAccount(data, account.id) > 0 ? <><Text>Pending goal allocations: {formatMoney(pendingForAccount(data, account.id))}</Text>{available !== null ? <Text>Available after pending allocations: {formatMoney(available)}</Text> : <Text>Outstanding balance including pending: {formatMoney(accountBalance(data, account) + pendingForAccount(data, account.id))}</Text>}</> : null}
     {earnsInterest ? <Action label={interestOpen ? 'Hide interest details' : 'Interest details'} variant="text" onPress={() => setInterestOpen(!interestOpen)} /> : null}
     {earnsInterest && interestOpen ? <>
@@ -42,9 +42,7 @@ export default function AccountDetail() {
       <Text style={{ color: '#69777A', fontSize: 12 }}>Simulation estimate only. It does not reproduce issuer billing rules. Savings use effective APY with daily compounding; cards estimate APR / 365.</Text>
       {postingPreview ? <><Text>Next completed statement month: {postingPreview.periodKey} · {formatMoney(postingPreview.amountCents)} estimated</Text><Action label={account.type === 'credit_card' ? 'Post monthly interest charge' : 'Credit monthly interest'} onPress={() => void postMonthlyInterest(account.id)} /></> : null}
     </> : null}
-    <Action label="Transfer" onPress={() => router.push({ pathname: '/transaction/new', params: { accountId: account.id, type: 'transfer' } })} />
-    <Action label="Edit account" onPress={() => router.push({ pathname: '/accounts', params: { accountId: account.id } })} />
-    <Action label="+ Add transaction" variant="primary" fullWidth onPress={() => router.push({ pathname: '/transaction/new', params: { accountId: account.id } })} />
+    <View style={{ flexDirection: 'row', gap: 10 }}><View style={{ flex: 1 }}><Action label="Transfer" fullWidth onPress={() => router.push({ pathname: '/transaction/new', params: { accountId: account.id, type: 'transfer' } })} /></View><View style={{ flex: 1 }}><Action label="Add transaction" variant="primary" fullWidth onPress={() => router.push({ pathname: '/transaction/new', params: { accountId: account.id } })} /></View></View>
     <SectionTitle>Recent Activity</SectionTitle>
     {!transactions.length && !deposits.length && !pendingContributions.length ? <Text>No deposits, transactions, or pending goal allocations associated with this account.</Text> : null}
     {deposits.map(paycheck => <RecordLine key={`paycheck-${paycheck.id}`} title={`Paycheck deposit · ${formatMoney(paycheck.accountCreditCents ?? paycheck.amountCents)}`} detail={`${formatDateDisplay(paycheck.receivedAt)} · ${paycheck.source ?? 'Income'}`} onView={() => router.push({ pathname: '/paycheck/[id]', params: { id: paycheck.id } })} onEdit={() => router.push({ pathname: '/paychecks', params: { paycheckId: paycheck.id } })} onDelete={() => paycheckCrud.confirmDelete(paycheck.id)} />)}

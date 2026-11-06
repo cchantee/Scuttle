@@ -5,7 +5,8 @@ export const colors = {
   border: '#E9E7E2', track: '#ECEBE7', blue: '#8FB3C0', glass: '#DCE7DA',
   coral: '#D58A71', sand: '#E4B793', shell: '#EFD3C1', mist: '#D9DFE6', teal: '#869F9F',
 };
-export const fonts = { default: 'Playful Lines', wordmark: 'Playful Lines', message: 'Mayonice', money: Platform.select({ ios: 'System', android: 'sans-serif', default: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' })!, greeting: 'Stay Playful' };
+const readable = Platform.select({ ios: 'System', android: 'sans-serif', default: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' })!;
+export const fonts = { default: readable, wordmark: 'Playful Lines', message: 'Mayonice', money: Platform.select({ ios: 'System', android: 'sans-serif', default: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' })!, greeting: 'Stay Playful' };
 export const fontAssets = {
   'Playful Lines': require('../../assets/fonts/playful-lines/PlayfulLines.otf'),
   Mayonice: require('../../assets/fonts/mayonice/Mayonice.ttf'),

@@ -13,9 +13,9 @@ function currencyChildren(children: React.ReactNode): React.ReactNode {
   });
 }
 export function Text({ style, children, role = 'default', ...props }: Omit<TextProps, 'role'> & { role?: keyof typeof fonts }) {
-  // The supplied decorative faces have one weight. System financial text uses a real semibold weight.
+  // Keep the hand-drawn brand faces, with readable system text for controls and financial detail.
   const merged = StyleSheet.flatten(style) ?? {};
-  return <NativeText {...props} style={[{ color: colors.text, fontSize: 16 }, merged, { fontFamily: fonts[role], fontWeight: role === 'money' ? '600' : '400', fontStyle: 'normal' }]}>{currencyChildren(children)}</NativeText>;
+  return <NativeText {...props} style={[{ color: colors.text, fontSize: 16, lineHeight: Math.round((merged.fontSize ?? 16) * (role === 'money' ? 1.2 : 1.4)) }, merged, { fontFamily: fonts[role], fontWeight: role === 'default' || role === 'money' ? merged.fontWeight ?? (role === 'money' ? '600' : '400') : '400', fontStyle: 'normal', ...(role === 'money' ? { fontVariant: ['tabular-nums'] as const } : {}) }]}>{currencyChildren(children)}</NativeText>;
 }
 export function TextInput({ style, keyboardType, ...props }: TextInputProps) {
   const numeric = keyboardType === 'decimal-pad';

@@ -23,13 +23,13 @@ export default function MoveMoney() {
     catch (e) { reportError(e instanceof Error ? e.message : 'Enter a valid amount.'); }
     finally { setBusy(false); }
   };
-  return <Page title="Move money"><Feedback />
-    <Text>Move unspent money in your paycheck plan. Your account balance stays the same.</Text>
+  return <Page title="Move budget money"><Feedback />
+
     {done ? <Completion message="Your money has a plan." /> : null}
     <Card>
       <SelectId label="From budget category" choices={choices.map(a => ({ id: a.id, title: `${data.categories.find(c => c.id === a.categoryId)?.name ?? 'Category'} · ${formatMoney(allocationSummary(data, a).remainingCents)} left` }))} value={source} onChange={value => { setSource(value); setCategory(''); setGoal(''); setDone(false); }} />
       <SelectId label="To budget category" choices={data.categories.filter(c => c.id !== allocation?.categoryId).map(c => ({ id: c.id, title: c.name }))} value={category} onChange={value => { setCategory(value); setGoal(''); }} />
-      <Text>or</Text>
+      <Text style={{ textAlign: 'center', fontSize: 12 }}>— or put it toward a goal —</Text>
       <SelectId label="To savings goal" choices={data.goals.map(g => ({ id: g.id, title: g.name }))} value={goal} onChange={value => { setGoal(value); setCategory(''); }} />
       <Field label="Amount to move" value={amount} onChangeText={setAmount} keyboardType="decimal-pad" placeholder="0.00" />
       <Action label={busy ? 'Moving…' : 'Move money'} variant="primary" fullWidth onPress={() => void submit()} />

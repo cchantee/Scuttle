@@ -11,7 +11,7 @@ Scuttle is a paycheck-based budgeting application built with Expo, React Native,
 
 To open the web version, run `npx expo start --web`.
 
-To populate the app with connected example accounts, paychecks, budgets, transactions, and savings goals, open **More → Sample data → Load sample data**. The loader adds records to the current device or signed-in cloud profile without replacing existing records, and it only loads once per profile. Use **Delete all sample data** in the same section to remove the example records; removal is blocked if a regular record depends on a sample record.
+Jordan Taylor is the only study/sample dataset. The researcher restores the complete baseline using `npm run study:jordan -- reset` (interactive confirmation required), then checks database readiness with `npm run study:jordan -- verify-live`. See [study reset instructions](docs/jordan-study-account.md). Participants use Jordan's existing login; the mobile app has no sample loader or reset control.
 
 This project uses Expo SDK 58 and matches the SDK 58 Expo Go installed on your phone. Without backend credentials it saves data on the current device only. To enable registration, sign-in, and cross-device sync:
 
@@ -70,3 +70,7 @@ Other scripts: `npm test`, `npm run typecheck`, and `npm run qa:backend` (runs b
 ## Current verification status
 
 SDK 58 dependency validation and TypeScript checking pass. Expo exported web, iOS, and Android JavaScript bundles. Start with `npx expo start --clear` and open the QR code in SDK 58 Expo Go. Cloud registration and syncing require the Supabase setup above.
+
+## Launch any research interface
+
+Run `npm run test:interface` and choose 1 (Human), 2 (AI), or 3 (Human + AI). Ctrl+C stops Expo and returns to the selector. Separate Git worktrees preserve each design and dependency lockfile. See [setup, iPhone, and study instructions](docs/interface-launcher.md).
